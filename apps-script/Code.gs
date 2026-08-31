@@ -581,7 +581,7 @@ function setupInvoiceTemplate() {
   const BORDER = "#D1D5DB";
   const LIGHT_BG = "#F1F5F9";
 
-  body.getParagraphs()[0].setText(""); // the blank paragraph every new Doc starts with
+  // (A new Doc already starts with one blank paragraph — nothing needed to clear it.)
 
   // ---------- Header: logo + brand (left) | INVOICE + meta table (right) ----------
   const headerTable = body.appendTable([["", ""]]);
