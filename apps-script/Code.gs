@@ -34,6 +34,9 @@ function doPost(e) {
       case "deleteWorkType": result = handleDeleteWorkType(body); break;
       case "assignClientWorkType": result = handleAssignClientWorkType(body); break;
       case "unassignClientWorkType": result = handleUnassignClientWorkType(body); break;
+      case "grantResubmitSlot": result = handleGrantResubmitSlot(body); break;
+      case "adminUpdateLineItem": result = handleAdminUpdateLineItem(body); break;
+      case "adminDeleteLineItem": result = handleAdminDeleteLineItem(body); break;
       default: throw new Error("Unknown action");
     }
     return jsonResponse(result);
@@ -84,6 +87,23 @@ function handleSubmit(body) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    // A person gets exactly one submission per month; refuse the whole request
+    // up front (before writing anything) if any month it touches is already
+    // locked, rather than silently accepting a partial submission.
+    const invoiceIdsTouched = [];
+    const seenIds = {};
+    lineItems.forEach(function (li) {
+      const id = auth.username + "__" + li.month;
+      if (!seenIds[id]) { seenIds[id] = true; invoiceIdsTouched.push(id); }
+    });
+    const existingInvoices = readRows("Invoices");
+    for (let i = 0; i < invoiceIdsTouched.length; i++) {
+      const existing = findRow(existingInvoices, "id", invoiceIdsTouched[i]);
+      if (existing && isLocked(existing)) {
+        throw new Error("You've already submitted for " + existing.month + ". Ask your admin to open another submission window.");
+      }
+    }
+
     const now = new Date().toISOString();
     const prepared = lineItems.map(function (li) {
       const quantity = Number(li.quantity) || 0;
@@ -136,6 +156,7 @@ function handleSubmit(body) {
         total: Math.round(total * 100) / 100,
         status: existing ? existing.status : "Submitted",
         notes: notes,
+        locked: true, // consumes this month's one submission (or an admin-granted extra slot)
         createdAt: existing ? existing.createdAt : now,
         updatedAt: now,
       });
@@ -184,6 +205,84 @@ function handleUpdateStatus(body) {
   }
 }
 
+// Unlocks exactly one more submission for a person+month that's already
+// locked (or that never existed, in which case there's nothing to unlock —
+// their next submission is already free since no invoice exists yet). Submit
+// re-locks it automatically the moment that slot gets used.
+function handleGrantResubmitSlot(body) {
+  requireAdmin(body);
+  const username = String(body.username || "").trim();
+  const month = String(body.month || "").trim();
+  if (!username || !month) throw new Error("Missing username or month");
+
+  const invoiceId = username + "__" + month;
+  const updated = updateFields("Invoices", "id", invoiceId, { locked: false });
+  if (!updated) throw new Error("That person hasn't submitted anything for that month yet — nothing to unlock.");
+  return { success: true };
+}
+
+function handleAdminUpdateLineItem(body) {
+  requireAdmin(body);
+  const id = body.id;
+  if (!id) throw new Error("Missing id");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const row = findRow(readRows("LineItems"), "id", id);
+    if (!row) throw new Error("Line item not found");
+
+    const quantity = Number(body.quantity);
+    const rate = Number(body.rate);
+    if (!(quantity >= 0) || !(rate >= 0)) throw new Error("Quantity and rate must be valid numbers");
+
+    const client = String(body.client || "").trim();
+    const workType = String(body.workType || "").trim();
+    if (!client || !workType) throw new Error("Client and work type are required");
+
+    updateFields("LineItems", "id", id, {
+      client: client,
+      endClient: String(body.endClient || "").trim(),
+      workType: workType,
+      description: String(body.description || "").trim(),
+      quantity: quantity,
+      rate: rate,
+      amount: Math.round(quantity * rate * 100) / 100,
+    });
+
+    recomputeInvoiceTotal(row.invoiceId);
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleAdminDeleteLineItem(body) {
+  requireAdmin(body);
+  const id = body.id;
+  if (!id) throw new Error("Missing id");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const row = findRow(readRows("LineItems"), "id", id);
+    if (!row) throw new Error("Line item not found");
+
+    deleteRowById("LineItems", id);
+    recomputeInvoiceTotal(row.invoiceId);
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function recomputeInvoiceTotal(invoiceId) {
+  const total = readRows("LineItems")
+    .filter(function (r) { return r.invoiceId === invoiceId; })
+    .reduce(function (sum, r) { return sum + (Number(r.amount) || 0); }, 0);
+  updateFields("Invoices", "id", invoiceId, { total: Math.round(total * 100) / 100, updatedAt: new Date().toISOString() });
+}
+
 // Clients tab: one row per client (endClient blank) registers the client
 // itself; one row per (client, endClient) pair registers an end-client
 // suggestion under that client. Any logged-in user can read this list (the
@@ -229,19 +328,8 @@ function handleDeleteClientRow(body) {
   requireAdmin(body);
   const id = body.id;
   if (!id) throw new Error("Missing id");
-
-  const sheet = getSheet("Clients");
-  const headers = getHeaders(sheet);
-  const idIdx = headers.indexOf("id");
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][idIdx]) === String(id)) {
-      sheet.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  throw new Error("Not found");
+  if (!deleteRowById("Clients", id)) throw new Error("Not found");
+  return { success: true };
 }
 
 // WorkTypes tab: the master list of every work type across the business.
@@ -289,19 +377,8 @@ function handleDeleteWorkType(body) {
   requireAdmin(body);
   const id = body.id;
   if (!id) throw new Error("Missing id");
-
-  const sheet = getSheet("WorkTypes");
-  const headers = getHeaders(sheet);
-  const idIdx = headers.indexOf("id");
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][idIdx]) === String(id)) {
-      sheet.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  throw new Error("Not found");
+  if (!deleteRowById("WorkTypes", id)) throw new Error("Not found");
+  return { success: true };
 }
 
 function handleAssignClientWorkType(body) {
@@ -348,7 +425,7 @@ function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername) {
     if (!r.invoiceId) return;
     if (!grouped[r.invoiceId]) grouped[r.invoiceId] = [];
     grouped[r.invoiceId].push({
-      client: r.client, endClient: r.endClient, workType: r.workType, description: r.description,
+      id: r.id, client: r.client, endClient: r.endClient, workType: r.workType, description: r.description,
       quantity: Number(r.quantity) || 0, rate: Number(r.rate) || 0, amount: Number(r.amount) || 0,
     });
   });
@@ -366,6 +443,7 @@ function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername) {
       total: rec ? Number(rec.total) : items.reduce(function (s, li) { return s + li.amount; }, 0),
       status: rec ? rec.status : "Submitted",
       notes: rec ? String(rec.notes || "") : "",
+      locked: rec ? isLocked(rec) : false,
     };
     if (fullNameByUsername && fullNameByUsername[username]) entry.fullName = fullNameByUsername[username];
     return entry;
@@ -385,6 +463,18 @@ function requireAdmin(body) {
 
 function findRow(rows, column, value) {
   return rows.find(function (r) { return String(r[column]) === String(value); });
+}
+
+// An Invoices row with no recorded `locked` value is an older row from
+// before this feature existed — since it already has line items, that
+// means a submission already happened, so it defaults to locked rather
+// than silently letting a second submission through.
+function isLocked(invoiceRow) {
+  if (invoiceRow.locked === true) return true;
+  if (invoiceRow.locked === false) return false;
+  const s = String(invoiceRow.locked || "").toUpperCase();
+  if (s === "FALSE") return false;
+  return true;
 }
 
 // ============================== Sheet access ==============================
@@ -461,6 +551,21 @@ function updateFields(sheetName, matchColumn, matchValue, fields) {
         cell.setNumberFormat("@");
         cell.setValue(fields[key]);
       });
+      return true;
+    }
+  }
+  return false;
+}
+
+function deleteRowById(sheetName, id) {
+  const sheet = getSheet(sheetName);
+  const headers = getHeaders(sheet);
+  const idIdx = headers.indexOf("id");
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]) === String(id)) {
+      sheet.deleteRow(i + 1);
       return true;
     }
   }

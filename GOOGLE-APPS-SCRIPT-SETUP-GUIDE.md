@@ -152,3 +152,19 @@ The Submit form now works the way you'd expect for a real invoice: pick a client
 3. Nothing else — the new Submit form ships automatically with the frontend.
 
 Notes accumulate across multiple submissions in the same month (each one timestamped) rather than overwriting each other, so nothing anyone writes is ever lost.
+
+---
+
+## Update: One submission per month + full admin editing
+
+Now enforced: each person gets exactly one submission per month. Once they submit, trying to submit again for that month is refused with a clear message, until you open a one-time extra window for them from the Admin panel — which closes again automatically the moment they use it. You also now have full control to edit or delete any already-submitted line item.
+
+1. **Add a `locked` column to your existing `Invoices` tab**: same as the `notes` column before — click the first empty column header in row 1, type `locked`. (Fresh setups already have it via `sheet-templates/Invoices.csv`.)
+2. **Update the backend**: paste the current [apps-script/Code.gs](apps-script/Code.gs) into the Apps Script editor (real `JWT_SECRET` back in), then **Deploy → Manage deployments → New version → Deploy**.
+3. Nothing else on the frontend side — it's already live once you push.
+
+**What you'll see in Admin now:**
+- Every invoice card shows either **🔒 Allow Resubmit** (they've used their one submission — click this to open exactly one more) or **🔓 Open** (they can still submit, either it's their first time this month or you just opened a slot for them).
+- Every line item has **Edit** (turns that row into editable fields — client, end client, work type, description, qty, rate — with Save/Cancel) and **Delete** (asks to confirm, then removes it). Both instantly recalculate the invoice's total.
+
+**Important nuance**: an existing invoice from before this update has no recorded lock state, so it defaults to **locked** the first time you see it (since it already has line items, meaning that person already submitted). If someone genuinely needs to add more for an old month, just click **Allow Resubmit** on it once.

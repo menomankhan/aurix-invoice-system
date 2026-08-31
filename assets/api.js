@@ -83,5 +83,14 @@ window.AurixApi = (function () {
     unassignClientWorkType(client, workType) {
       return call("unassignClientWorkType", { client, workType });
     },
+    grantResubmitSlot(username, month) {
+      return call("grantResubmitSlot", { username, month });
+    },
+    adminUpdateLineItem(fields) {
+      return call("adminUpdateLineItem", fields);
+    },
+    adminDeleteLineItem(id) {
+      return call("adminDeleteLineItem", { id });
+    },
   };
 })();

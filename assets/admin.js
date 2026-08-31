@@ -69,14 +69,18 @@
 
   function renderLineItemsTable(lineItems) {
     const rows = lineItems.map((li) => `
-      <tr class="border-t border-white/5">
+      <tr class="border-t border-white/5" data-line-id="${escapeHtml(li.id)}">
         <td class="py-2.5 pr-4 text-white/70">${escapeHtml(li.client)}</td>
         <td class="py-2.5 pr-4 text-white/70">${escapeHtml(li.endClient || "—")}</td>
         <td class="py-2.5 pr-4 text-white/70">${escapeHtml(li.workType)}</td>
         <td class="py-2.5 pr-4 text-white/50">${escapeHtml(li.description || "—")}</td>
         <td class="py-2.5 pr-4 text-right text-white/70">${li.quantity}</td>
         <td class="py-2.5 pr-4 text-right text-white/70">${currency(li.rate)}</td>
-        <td class="py-2.5 text-right font-semibold text-white">${currency(li.amount)}</td>
+        <td class="py-2.5 pr-4 text-right font-semibold text-white">${currency(li.amount)}</td>
+        <td class="py-2.5 pl-2 text-right whitespace-nowrap">
+          <button class="editLineItemBtn text-white/30 hover:text-white transition text-xs font-bold mr-2">Edit</button>
+          <button class="deleteLineItemBtn text-white/30 hover:text-red-400 transition text-xs font-bold">Delete</button>
+        </td>
       </tr>
     `).join("");
 
@@ -91,13 +95,60 @@
               <th class="pb-2 pr-4 font-bold">Description</th>
               <th class="pb-2 pr-4 font-bold text-right">Qty</th>
               <th class="pb-2 pr-4 font-bold text-right">Rate</th>
-              <th class="pb-2 font-bold text-right">Amount</th>
+              <th class="pb-2 pr-4 font-bold text-right">Amount</th>
+              <th class="pb-2 font-bold text-right"></th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     `;
+  }
+
+  function renderLineItemEditRow(row, li) {
+    const { clients } = window.AurixClientsStore.get();
+    const { workTypes } = window.AurixWorkTypesStore.get();
+    const clientOptions = clients.includes(li.client) ? clients : [li.client, ...clients];
+    const workTypeOptions = workTypes.includes(li.workType) ? workTypes : [li.workType, ...workTypes];
+
+    row.innerHTML = `
+      <td class="py-2 pr-2"><select class="editClient aurix-input rounded-lg px-2 py-1.5 text-xs w-full">${clientOptions.map((c) => `<option value="${escapeHtml(c)}" ${c === li.client ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select></td>
+      <td class="py-2 pr-2"><input type="text" class="editEndClient aurix-input rounded-lg px-2 py-1.5 text-xs w-full" value="${escapeHtml(li.endClient || "")}" /></td>
+      <td class="py-2 pr-2"><select class="editWorkType aurix-input rounded-lg px-2 py-1.5 text-xs w-full">${workTypeOptions.map((w) => `<option value="${escapeHtml(w)}" ${w === li.workType ? "selected" : ""}>${escapeHtml(w)}</option>`).join("")}</select></td>
+      <td class="py-2 pr-2"><input type="text" class="editDescription aurix-input rounded-lg px-2 py-1.5 text-xs w-full" value="${escapeHtml(li.description || "")}" /></td>
+      <td class="py-2 pr-2"><input type="number" min="0" step="1" class="editQty aurix-input rounded-lg px-2 py-1.5 text-xs w-16 text-right" value="${li.quantity}" /></td>
+      <td class="py-2 pr-2"><input type="number" min="0" step="0.01" class="editRate aurix-input rounded-lg px-2 py-1.5 text-xs w-20 text-right" value="${li.rate}" /></td>
+      <td class="py-2 pr-4 text-right text-white/30 text-xs">recalculated on save</td>
+      <td class="py-2 pl-2 text-right whitespace-nowrap">
+        <button class="saveLineItemBtn text-aurixblue hover:text-white transition text-xs font-bold mr-2">Save</button>
+        <button class="cancelLineItemBtn text-white/30 hover:text-white transition text-xs font-bold">Cancel</button>
+      </td>
+    `;
+
+    row.querySelector(".cancelLineItemBtn").addEventListener("click", () => render());
+
+    row.querySelector(".saveLineItemBtn").addEventListener("click", async () => {
+      const saveBtn = row.querySelector(".saveLineItemBtn");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "…";
+      try {
+        await window.AurixApi.adminUpdateLineItem({
+          id: li.id,
+          client: row.querySelector(".editClient").value,
+          endClient: row.querySelector(".editEndClient").value.trim(),
+          workType: row.querySelector(".editWorkType").value,
+          description: row.querySelector(".editDescription").value.trim(),
+          quantity: Number(row.querySelector(".editQty").value) || 0,
+          rate: Number(row.querySelector(".editRate").value) || 0,
+        });
+        await window.AurixAdmin.load();
+      } catch (err) {
+        errorEl.textContent = err.message || "Could not save that line item.";
+        errorEl.classList.remove("hidden");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save";
+      }
+    });
   }
 
   function getFiltered() {
@@ -143,6 +194,10 @@
           </div>
           <div class="flex items-center gap-3">
             ${statusBadge(inv.status)}
+            ${inv.locked
+              ? `<button class="resubmitBtn text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/10 hover:border-amber-400 hover:bg-amber-400/10 transition text-amber-400/80" title="They can't submit again for this month until you allow it">🔒 Allow Resubmit</button>`
+              : `<span class="text-[11px] text-green-400/70 font-semibold" title="They can submit once more for this month">🔓 Open</span>`
+            }
             <p class="font-bold text-lg">${currency(inv.total)}</p>
             <div class="flex items-center gap-2">
               <button data-action="Approved" class="statusBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition disabled:opacity-30 disabled:hover:border-white/10 disabled:hover:bg-transparent disabled:cursor-not-allowed" ${inv.status === "Approved" ? "disabled" : ""}>Approve</button>
@@ -154,6 +209,51 @@
         ${inv.notes ? `<div class="mt-4 pt-4 border-t border-white/5"><p class="text-white/30 text-[11px] uppercase tracking-widest font-bold mb-1.5">Notes</p><p class="text-white/60 text-sm whitespace-pre-wrap">${escapeHtml(inv.notes)}</p></div>` : ""}
       </div>
     `).join("");
+
+    listEl.querySelectorAll(".resubmitBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const card = btn.closest("[data-invoice-id]");
+        const inv = allInvoices.find((i) => i.invoiceId === card.dataset.invoiceId);
+        if (!inv) return;
+        btn.disabled = true;
+        try {
+          await window.AurixApi.grantResubmitSlot(inv.username, inv.month);
+          inv.locked = false;
+          render();
+        } catch (err) {
+          errorEl.textContent = err.message || "Could not open a resubmission slot.";
+          errorEl.classList.remove("hidden");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    listEl.querySelectorAll(".editLineItemBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest("tr");
+        const card = btn.closest("[data-invoice-id]");
+        const inv = allInvoices.find((i) => i.invoiceId === card.dataset.invoiceId);
+        const li = inv && inv.lineItems.find((x) => x.id === row.dataset.lineId);
+        if (!li) return;
+        renderLineItemEditRow(row, li);
+      });
+    });
+
+    listEl.querySelectorAll(".deleteLineItemBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this line item? This cannot be undone.")) return;
+        const row = btn.closest("tr");
+        btn.disabled = true;
+        try {
+          await window.AurixApi.adminDeleteLineItem(row.dataset.lineId);
+          await window.AurixAdmin.load();
+        } catch (err) {
+          errorEl.textContent = err.message || "Could not delete that line item.";
+          errorEl.classList.remove("hidden");
+          btn.disabled = false;
+        }
+      });
+    });
 
     listEl.querySelectorAll(".statusBtn").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -386,6 +486,11 @@
       try {
         const data = await window.AurixApi.getAdminInvoices();
         allInvoices = (data && data.invoices) || [];
+        // Warm these so line-item edit dropdowns are ready; a failure here
+        // shouldn't block showing invoices, editing would just degrade to
+        // fewer dropdown options.
+        window.AurixClientsStore.load().catch(() => {});
+        window.AurixWorkTypesStore.load().catch(() => {});
         populateFilters();
         render();
       } catch (err) {

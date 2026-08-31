@@ -29,6 +29,7 @@
         </div>
         ${inv ? statusBadge(inv.status) : `<span class="text-white/30 text-sm">Nothing submitted yet</span>`}
       </div>
+      ${inv && inv.locked ? `<p class="text-amber-400/70 text-xs mt-3 pt-3 border-t border-white/5">You've already submitted for this month. Ask your admin if you need to submit again.</p>` : ""}
     `;
   }
 
