@@ -491,6 +491,18 @@ function escapeHtmlForEmail(str) {
   return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Run this ONCE from the Apps Script editor (select "authorizeMailScope"
+// from the function dropdown, click Run) if you ever see "You do not have
+// permission to call MailApp.sendEmail" from the deployed web app. Running
+// a mail-sending call directly from the editor forces the one-time consent
+// screen for that specific permission — after that, the deployed web app
+// can use it too. You should receive a real test email at your own address.
+function authorizeMailScope() {
+  const email = Session.getActiveUser().getEmail();
+  MailApp.sendEmail(email, "Aurix — mail permission test", "If you're reading this, mail sending is authorized correctly.");
+  Logger.log("Test email sent to " + email + ". Check your inbox.");
+}
+
 // Run this ONCE from the Apps Script editor (select "setupInvoiceTemplate"
 // from the function dropdown at the top, click Run) to build the invoice
 // template Doc. Copy the Document ID it logs (View → Logs, or Ctrl/Cmd+Enter)
