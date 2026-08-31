@@ -503,6 +503,26 @@ function authorizeMailScope() {
   Logger.log("Test email sent to " + email + ". Check your inbox.");
 }
 
+// Run this ONCE from the Apps Script editor (select "authorizeDriveScope",
+// click Run) if you see "You do not have permission to call
+// DriveApp.getFileById" (or any Drive/Docs error) when someone actually
+// signs an invoice. This runs the exact same PDF-generation code the real
+// signing flow uses — copying the template, filling it in, converting to
+// PDF, saving it to Drive — with placeholder data, so it forces every
+// Drive/Docs permission that flow needs in one go, not one error at a time.
+// Make sure INVOICE_TEMPLATE_DOC_ID above is already set before running this.
+function authorizeDriveScope() {
+  const dummyInvoice = { id: "test__2000-01", username: "test", month: "2000-01", total: 1 };
+  const dummyUser = { fullName: "Authorization Test", bankName: "-", bankAccountTitle: "-", bankAccountNumber: "-" };
+  const dummyLineItems = [{ client: "Test Client", endClient: "", workType: "Test", description: "Authorization test — safe to ignore", quantity: 1, rate: 1, amount: 1 }];
+  // A tiny 1x1 transparent PNG, just to exercise the image-insert code path.
+  const dummySignature = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+  const pdfUrl = generateSignedInvoicePdf(dummyInvoice, dummyUser, dummyLineItems, dummySignature);
+  Logger.log("Authorization test succeeded. Test PDF created at: " + pdfUrl);
+  Logger.log("Open that link to confirm it looks right, then delete it — it's just a test, safe to remove from the 'Aurix Signed Invoices' folder in your Drive.");
+}
+
 // Run this ONCE from the Apps Script editor (select "setupInvoiceTemplate"
 // from the function dropdown at the top, click Run) to build the invoice
 // template Doc. Copy the Document ID it logs (View → Logs, or Ctrl/Cmd+Enter)
