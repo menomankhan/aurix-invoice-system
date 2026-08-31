@@ -47,8 +47,8 @@ window.AurixApi = (function () {
     login(username, password) {
       return call("login", { username, password });
     },
-    submitLineItems(lineItems) {
-      return call("submit", { lineItems });
+    submitLineItems(lineItems, notes) {
+      return call("submit", { lineItems, notes });
     },
     getMyInvoices() {
       return call("myInvoices", {});

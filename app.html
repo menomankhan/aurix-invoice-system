@@ -66,16 +66,21 @@
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">New Submission</h1>
-          <p class="text-white/40 text-sm mt-1">Add every line item for this sitting, then submit them together.</p>
+          <p class="text-white/40 text-sm mt-1">Pick a client, add every line for that client, then add another client if you have more.</p>
         </div>
       </div>
 
-      <div id="lineItemsContainer" class="space-y-4"></div>
+      <div id="clientGroupsContainer" class="space-y-4"></div>
 
-      <button id="addLineItemBtn" type="button"
+      <button id="addClientGroupBtn" type="button"
         class="w-full border border-dashed border-white/15 hover:border-aurixblue/60 hover:bg-aurixblue/5 transition rounded-xl py-3 text-sm font-semibold text-white/60 hover:text-white flex items-center justify-center gap-2">
         <span class="text-lg leading-none">+</span> Add another line item
       </button>
+
+      <div class="aurix-card rounded-2xl p-5 space-y-2">
+        <label for="submissionNotes" class="text-[11px] font-bold uppercase tracking-widest text-white/40">Notes (optional)</label>
+        <textarea id="submissionNotes" rows="3" class="aurix-input w-full rounded-xl px-3 py-2.5 text-sm resize-none" placeholder="Anything unusual, or something that doesn't fit the fields above…"></textarea>
+      </div>
 
       <div class="aurix-card rounded-2xl p-5 flex items-center justify-between">
         <div>
@@ -198,49 +203,69 @@
 
   </main>
 
-  <!-- Line item row template -->
-  <template id="lineItemTemplate">
-    <div class="line-item aurix-card rounded-2xl p-5 relative">
-      <button type="button" class="removeLineItemBtn absolute top-4 right-4 text-white/30 hover:text-red-400 transition" title="Remove this line item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="space-y-1.5">
+  <!-- One client group: a client picked once, holding one or more sub-line-items -->
+  <template id="clientGroupTemplate">
+    <div class="client-group aurix-card rounded-2xl p-5 space-y-4">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex-1 max-w-sm space-y-1.5">
           <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Client</label>
-          <select class="clientSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+          <select class="groupClientSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
         </div>
-        <div class="space-y-1.5">
-          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">End Client</label>
-          <input list="endClientList" class="endClientInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" placeholder="e.g. Pranav" />
+        <button type="button" class="removeGroupBtn text-white/30 hover:text-red-400 transition shrink-0" title="Remove this client and all its lines">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="subLineItemsContainer space-y-3"></div>
+
+      <button type="button" class="addSubLineItemBtn w-full border border-dashed border-white/10 hover:border-aurixblue/50 hover:bg-aurixblue/5 transition rounded-xl py-2.5 text-xs font-semibold text-white/50 hover:text-white">
+        + Add line for this client
+      </button>
+
+      <div class="flex items-center justify-between pt-3 border-t border-white/5">
+        <span class="text-white/40 text-[11px] uppercase tracking-widest font-bold">Client Subtotal</span>
+        <span class="groupSubtotal font-bold">Rs 0.00</span>
+      </div>
+    </div>
+  </template>
+
+  <!-- One sub-line-item inside a client group -->
+  <template id="subLineItemTemplate">
+    <div class="sub-line-item bg-white/[0.02] border border-white/5 rounded-xl p-4 relative space-y-3">
+      <button type="button" class="removeSubLineItemBtn absolute top-3 right-3 text-white/20 hover:text-red-400 transition" title="Remove this line">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pr-6">
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">End Client</label>
+          <input list="endClientList" class="endClientInput aurix-input w-full rounded-lg px-3 py-2 text-sm" placeholder="e.g. Pranav" />
           <datalist class="endClientDatalist"></datalist>
         </div>
-        <div class="space-y-1.5">
-          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Work Type</label>
-          <select class="workTypeSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Work Type</label>
+          <select class="workTypeSelect aurix-input w-full rounded-lg px-3 py-2 text-sm"></select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Month</label>
+          <select class="monthSelect aurix-input w-full rounded-lg px-3 py-2 text-sm"></select>
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-        <div class="space-y-1.5 sm:col-span-1">
-          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Description</label>
-          <input type="text" class="descriptionInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" placeholder="Short description" />
+      <div class="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr] gap-3">
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Description</label>
+          <input type="text" class="descriptionInput aurix-input w-full rounded-lg px-3 py-2 text-sm" placeholder="Short description" />
         </div>
-        <div class="space-y-1.5">
-          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Month</label>
-          <select class="monthSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Qty</label>
+          <input type="number" min="0" step="1" value="1" class="quantityInput aurix-input w-full rounded-lg px-3 py-2 text-sm" />
         </div>
-        <div class="grid grid-cols-3 gap-3">
-          <div class="space-y-1.5">
-            <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Qty</label>
-            <input type="number" min="0" step="1" value="1" class="quantityInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Rate</label>
-            <input type="number" min="0" step="0.01" value="0" class="rateInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Amount</label>
-            <div class="amountDisplay aurix-input w-full rounded-xl px-3 py-2.5 text-sm bg-white/[0.02] text-white/70 font-semibold">Rs 0.00</div>
-          </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Rate</label>
+          <input type="number" min="0" step="0.01" value="0" class="rateInput aurix-input w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Amount</label>
+          <div class="amountDisplay aurix-input w-full rounded-lg px-3 py-2 text-sm bg-white/[0.02] text-white/70 font-semibold">Rs 0.00</div>
         </div>
       </div>
     </div>

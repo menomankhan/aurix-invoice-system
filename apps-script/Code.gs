@@ -106,6 +106,8 @@ function handleSubmit(body) {
 
     prepared.forEach(function (item) { appendRow("LineItems", item); });
 
+    const submissionNote = String(body.notes || "").trim();
+
     // Recompute the total for every distinct invoice touched by this submission —
     // usually just one, but a submission can span months in one sitting.
     const seen = {};
@@ -119,12 +121,21 @@ function handleSubmit(body) {
 
       const existing = findRow(readRows("Invoices"), "id", item.invoiceId);
 
+      // Notes accumulate across submissions (timestamped) rather than overwrite,
+      // so nothing said in an earlier note for this invoice is ever lost.
+      let notes = existing ? String(existing.notes || "") : "";
+      if (submissionNote) {
+        const stamp = new Date().toLocaleString();
+        notes = notes ? (notes + "\n\n[" + stamp + "] " + submissionNote) : ("[" + stamp + "] " + submissionNote);
+      }
+
       upsertRow("Invoices", "id", {
         id: item.invoiceId,
         username: item.username,
         month: item.month,
         total: Math.round(total * 100) / 100,
         status: existing ? existing.status : "Submitted",
+        notes: notes,
         createdAt: existing ? existing.createdAt : now,
         updatedAt: now,
       });
@@ -354,6 +365,7 @@ function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername) {
       lineItems: items,
       total: rec ? Number(rec.total) : items.reduce(function (s, li) { return s + li.amount; }, 0),
       status: rec ? rec.status : "Submitted",
+      notes: rec ? String(rec.notes || "") : "",
     };
     if (fullNameByUsername && fullNameByUsername[username]) entry.fullName = fullNameByUsername[username];
     return entry;

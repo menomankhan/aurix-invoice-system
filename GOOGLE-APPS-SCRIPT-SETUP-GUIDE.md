@@ -140,3 +140,15 @@ Clients and work types used to be hardcoded in `assets/data.js` (needed a code c
 **Manage Clients**: type a client name (and optionally an end-client under it), click **Add**. **Remove** deletes a single row — a client's "bare" row and its end-client rows are independent, so remove each one if you want a client fully gone.
 
 **Manage Work Types**: the top section is your master list — add a new work type once, and it becomes available everywhere. The bottom section is per-client: pick a client from the dropdown, then check the exact work types that client actually does. A client with nothing checked keeps showing the full master list (the safe default) — checking anything switches that client to only those checked items, on the Submit form's Work Type dropdown, immediately.
+
+---
+
+## Update: Grouped submissions + Notes
+
+The Submit form now works the way you'd expect for a real invoice: pick a client once, add as many lines as that client needs, then add another client if you have more — instead of repeating the client on every single row. There's also a Notes field at the bottom for anything that doesn't fit the form.
+
+1. **Add a `notes` column to your existing `Invoices` tab**: open the sheet, click the first empty column's header cell in row 1, type `notes`. That's it — one new column header, no need to re-import anything. (If you haven't deployed at all yet, `sheet-templates/Invoices.csv` already includes it.)
+2. **Update the backend**: same as always — paste the current [apps-script/Code.gs](apps-script/Code.gs) into the Apps Script editor (put your real `JWT_SECRET` back in), then **Deploy → Manage deployments → New version → Deploy**.
+3. Nothing else — the new Submit form ships automatically with the frontend.
+
+Notes accumulate across multiple submissions in the same month (each one timestamped) rather than overwriting each other, so nothing anyone writes is ever lost.

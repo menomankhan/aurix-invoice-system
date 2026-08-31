@@ -93,6 +93,7 @@
           </div>
         </div>
         ${renderLineItemsTable(inv.lineItems)}
+        ${inv.notes ? `<div class="mt-4 pt-4 border-t border-white/5"><p class="text-white/30 text-[11px] uppercase tracking-widest font-bold mb-1.5">Notes</p><p class="text-white/60 text-sm whitespace-pre-wrap">${escapeHtml(inv.notes)}</p></div>` : ""}
       </div>
     `).join("");
   }

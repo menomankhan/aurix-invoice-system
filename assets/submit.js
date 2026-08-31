@@ -1,9 +1,11 @@
 (function () {
   if (!window.AurixSession) return;
 
-  const container = document.getElementById("lineItemsContainer");
-  const template = document.getElementById("lineItemTemplate");
-  const addBtn = document.getElementById("addLineItemBtn");
+  const container = document.getElementById("clientGroupsContainer");
+  const groupTemplate = document.getElementById("clientGroupTemplate");
+  const subTemplate = document.getElementById("subLineItemTemplate");
+  const addGroupBtn = document.getElementById("addClientGroupBtn");
+  const notesInput = document.getElementById("submissionNotes");
   const submitBtn = document.getElementById("submitBtn");
   const submitBtnText = document.getElementById("submitBtnText");
   const submitSpinner = document.getElementById("submitSpinner");
@@ -38,16 +40,16 @@
     });
   }
 
-  async function addLineItem() {
+  // ============================== Client groups ==============================
+
+  async function addClientGroup() {
     let clients = [];
-    let endClients = {};
     try {
-      ({ clients, endClients } = await window.AurixClientsStore.load());
+      ({ clients } = await window.AurixClientsStore.load());
     } catch (err) {
       errorEl.textContent = "Could not load the client list — you can still fill in everything else.";
       errorEl.classList.remove("hidden");
     }
-
     try {
       await window.AurixWorkTypesStore.load();
     } catch (err) {
@@ -55,100 +57,143 @@
       errorEl.classList.remove("hidden");
     }
 
-    const node = template.content.firstElementChild.cloneNode(true);
-
-    const clientSelect = node.querySelector(".clientSelect");
-    const endClientInput = node.querySelector(".endClientInput");
-    const endClientDatalist = node.querySelector(".endClientDatalist");
-    const workTypeSelect = node.querySelector(".workTypeSelect");
-    const monthSelect = node.querySelector(".monthSelect");
-    const quantityInput = node.querySelector(".quantityInput");
-    const rateInput = node.querySelector(".rateInput");
-    const amountDisplay = node.querySelector(".amountDisplay");
-    const removeBtn = node.querySelector(".removeLineItemBtn");
+    const group = groupTemplate.content.firstElementChild.cloneNode(true);
+    const clientSelect = group.querySelector(".groupClientSelect");
+    const addSubBtn = group.querySelector(".addSubLineItemBtn");
+    const removeGroupBtn = group.querySelector(".removeGroupBtn");
 
     fillSelect(clientSelect, clients, "Select a client…");
-    fillSelect(monthSelect, monthOptions(12));
-    monthSelect.value = currentMonthValue();
 
-    // unique datalist id per row so multiple rows don't collide
+    clientSelect.addEventListener("change", () => {
+      group.querySelectorAll(".sub-line-item").forEach((sub) => refreshSubLineItemOptions(sub, group));
+    });
+
+    addSubBtn.addEventListener("click", () => addSubLineItem(group));
+
+    removeGroupBtn.addEventListener("click", () => {
+      if (container.children.length === 1) return; // always keep at least one client group
+      group.remove();
+      recalcSubmissionTotal();
+    });
+
+    container.appendChild(group);
+    addSubLineItem(group); // every new client starts with one line
+  }
+
+  function refreshSubLineItemOptions(sub, group) {
+    const clientSelect = group.querySelector(".groupClientSelect");
+    const endClientInput = sub.querySelector(".endClientInput");
+    const endClientDatalist = sub.querySelector(".endClientDatalist");
+    const workTypeSelect = sub.querySelector(".workTypeSelect");
+
+    const { endClients } = window.AurixClientsStore.get();
+    const suggestions = endClients[clientSelect.value] || [];
+    endClientDatalist.innerHTML = "";
+    suggestions.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      endClientDatalist.appendChild(opt);
+    });
+
+    const previousWorkType = workTypeSelect.value;
+    const workTypeOptions = window.AurixWorkTypesStore.forClient(clientSelect.value);
+    fillSelect(workTypeSelect, workTypeOptions, "Select work type…");
+    workTypeSelect.value = workTypeOptions.includes(previousWorkType) ? previousWorkType : "";
+  }
+
+  // ============================== Sub-line-items ==============================
+
+  function addSubLineItem(group) {
+    const subContainer = group.querySelector(".subLineItemsContainer");
+    const sub = subTemplate.content.firstElementChild.cloneNode(true);
+
+    const endClientInput = sub.querySelector(".endClientInput");
+    const endClientDatalist = sub.querySelector(".endClientDatalist");
+    const monthSelect = sub.querySelector(".monthSelect");
+    const quantityInput = sub.querySelector(".quantityInput");
+    const rateInput = sub.querySelector(".rateInput");
+    const amountDisplay = sub.querySelector(".amountDisplay");
+    const removeBtn = sub.querySelector(".removeSubLineItemBtn");
+
+    // unique datalist id per sub-row so multiple rows don't collide
     const datalistId = "endClients_" + Math.random().toString(36).slice(2);
     endClientDatalist.id = datalistId;
     endClientInput.setAttribute("list", datalistId);
 
-    function refreshEndClientSuggestions() {
-      const suggestions = endClients[clientSelect.value] || [];
-      endClientDatalist.innerHTML = "";
-      suggestions.forEach((name) => {
-        const opt = document.createElement("option");
-        opt.value = name;
-        endClientDatalist.appendChild(opt);
-      });
-    }
-
-    function refreshWorkTypeOptions() {
-      const previousValue = workTypeSelect.value;
-      const options = window.AurixWorkTypesStore.forClient(clientSelect.value);
-      fillSelect(workTypeSelect, options, "Select work type…");
-      workTypeSelect.value = options.includes(previousValue) ? previousValue : "";
-    }
-
-    clientSelect.addEventListener("change", () => {
-      refreshEndClientSuggestions();
-      refreshWorkTypeOptions();
-    });
-    refreshEndClientSuggestions();
-    refreshWorkTypeOptions();
+    fillSelect(monthSelect, monthOptions(12));
+    monthSelect.value = currentMonthValue();
 
     function recalcAmount() {
       const qty = Number(quantityInput.value) || 0;
       const rate = Number(rateInput.value) || 0;
       amountDisplay.textContent = currency(qty * rate);
+      recalcGroupSubtotal(group);
       recalcSubmissionTotal();
     }
     quantityInput.addEventListener("input", recalcAmount);
     rateInput.addEventListener("input", recalcAmount);
 
     removeBtn.addEventListener("click", () => {
-      if (container.children.length === 1) return; // always keep at least one row
-      node.remove();
+      if (subContainer.children.length === 1) return; // always keep at least one line per client
+      sub.remove();
+      recalcGroupSubtotal(group);
       recalcSubmissionTotal();
     });
 
-    container.appendChild(node);
+    subContainer.appendChild(sub);
+    refreshSubLineItemOptions(sub, group);
     recalcAmount();
+  }
+
+  // ============================== Totals ==============================
+
+  function recalcGroupSubtotal(group) {
+    let total = 0;
+    group.querySelectorAll(".sub-line-item").forEach((sub) => {
+      const qty = Number(sub.querySelector(".quantityInput").value) || 0;
+      const rate = Number(sub.querySelector(".rateInput").value) || 0;
+      total += qty * rate;
+    });
+    group.querySelector(".groupSubtotal").textContent = currency(total);
   }
 
   function recalcSubmissionTotal() {
     let total = 0;
-    container.querySelectorAll(".line-item").forEach((row) => {
-      const qty = Number(row.querySelector(".quantityInput").value) || 0;
-      const rate = Number(row.querySelector(".rateInput").value) || 0;
+    container.querySelectorAll(".sub-line-item").forEach((sub) => {
+      const qty = Number(sub.querySelector(".quantityInput").value) || 0;
+      const rate = Number(sub.querySelector(".rateInput").value) || 0;
       total += qty * rate;
     });
     totalEl.textContent = currency(total);
   }
 
+  // ============================== Submit ==============================
+
   function collectLineItems() {
-    const rows = Array.from(container.querySelectorAll(".line-item"));
+    const groups = Array.from(container.querySelectorAll(".client-group"));
     const items = [];
-    for (const row of rows) {
-      const client = row.querySelector(".clientSelect").value;
-      const endClient = row.querySelector(".endClientInput").value.trim();
-      const workType = row.querySelector(".workTypeSelect").value;
-      const description = row.querySelector(".descriptionInput").value.trim();
-      const month = row.querySelector(".monthSelect").value;
-      const quantity = Number(row.querySelector(".quantityInput").value) || 0;
-      const rate = Number(row.querySelector(".rateInput").value) || 0;
+    for (const group of groups) {
+      const client = group.querySelector(".groupClientSelect").value;
+      if (!client) throw new Error("Every client group needs a client selected.");
 
-      if (!client || !workType || !month) {
-        throw new Error("Every line item needs a client, work type, and month.");
-      }
-      if (quantity <= 0) {
-        throw new Error("Quantity must be greater than zero on every line item.");
-      }
+      const subs = Array.from(group.querySelectorAll(".sub-line-item"));
+      for (const sub of subs) {
+        const endClient = sub.querySelector(".endClientInput").value.trim();
+        const workType = sub.querySelector(".workTypeSelect").value;
+        const description = sub.querySelector(".descriptionInput").value.trim();
+        const month = sub.querySelector(".monthSelect").value;
+        const quantity = Number(sub.querySelector(".quantityInput").value) || 0;
+        const rate = Number(sub.querySelector(".rateInput").value) || 0;
 
-      items.push({ client, endClient, workType, description, month, quantity, rate });
+        if (!workType || !month) {
+          throw new Error("Every line needs a work type and month.");
+        }
+        if (quantity <= 0) {
+          throw new Error("Quantity must be greater than zero on every line.");
+        }
+
+        items.push({ client, endClient, workType, description, month, quantity, rate });
+      }
     }
     if (items.length === 0) throw new Error("Add at least one line item first.");
     return items;
@@ -160,7 +205,7 @@
     submitSpinner.classList.toggle("hidden", !loading);
   }
 
-  addBtn.addEventListener("click", addLineItem);
+  addGroupBtn.addEventListener("click", addClientGroup);
 
   submitBtn.addEventListener("click", async () => {
     errorEl.classList.add("hidden");
@@ -177,12 +222,13 @@
 
     setLoading(true);
     try {
-      await window.AurixApi.submitLineItems(items);
+      await window.AurixApi.submitLineItems(items, notesInput.value.trim());
       successEl.textContent = "Submitted! Your invoice has been updated.";
       successEl.classList.remove("hidden");
 
       container.innerHTML = "";
-      addLineItem();
+      notesInput.value = "";
+      addClientGroup();
       recalcSubmissionTotal();
 
       if (window.AurixMyInvoices) window.AurixMyInvoices.invalidate();
@@ -194,6 +240,6 @@
     }
   });
 
-  // start with one row
-  addLineItem();
+  // start with one client group
+  addClientGroup();
 })();
