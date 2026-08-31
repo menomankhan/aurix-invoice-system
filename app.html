@@ -203,39 +203,53 @@
 
   </main>
 
-  <!-- One client group: a client picked once, holding one or more sub-line-items -->
+  <!-- One client group: a client picked once, holding one or more sub-line-items.
+       The header (client + count + subtotal) always shows; the body collapses. -->
   <template id="clientGroupTemplate">
-    <div class="client-group aurix-card rounded-2xl p-5 space-y-4">
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex-1 max-w-sm space-y-1.5">
+    <div class="client-group aurix-card rounded-2xl overflow-hidden">
+      <div class="flex items-center gap-3 sm:gap-4 p-5">
+        <button type="button" class="toggleGroupBtn text-white/40 hover:text-white transition shrink-0" title="Expand or collapse">
+          <svg class="groupChevron rotate-90 transition-transform" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div class="flex-1 min-w-0 max-w-sm space-y-1.5">
           <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Client</label>
           <select class="groupClientSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+        </div>
+        <div class="text-right shrink-0">
+          <p class="groupItemCount text-white/40 text-xs">1 line</p>
+          <p class="groupSubtotal font-bold">Rs 0.00</p>
         </div>
         <button type="button" class="removeGroupBtn text-white/30 hover:text-red-400 transition shrink-0" title="Remove this client and all its lines">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <div class="subLineItemsContainer space-y-3"></div>
+      <div class="groupBody px-5 pb-5 space-y-3">
+        <div class="subLineItemsContainer space-y-2"></div>
 
-      <button type="button" class="addSubLineItemBtn w-full border border-dashed border-white/10 hover:border-aurixblue/50 hover:bg-aurixblue/5 transition rounded-xl py-2.5 text-xs font-semibold text-white/50 hover:text-white">
-        + Add line for this client
-      </button>
-
-      <div class="flex items-center justify-between pt-3 border-t border-white/5">
-        <span class="text-white/40 text-[11px] uppercase tracking-widest font-bold">Client Subtotal</span>
-        <span class="groupSubtotal font-bold">Rs 0.00</span>
+        <button type="button" class="addSubLineItemBtn w-full border border-dashed border-white/10 hover:border-aurixblue/50 hover:bg-aurixblue/5 transition rounded-xl py-2.5 text-xs font-semibold text-white/50 hover:text-white">
+          + Add line for this client
+        </button>
       </div>
     </div>
   </template>
 
-  <!-- One sub-line-item inside a client group -->
+  <!-- One sub-line-item inside a client group. The summary bar always shows;
+       the detailed fields collapse behind it. -->
   <template id="subLineItemTemplate">
-    <div class="sub-line-item bg-white/[0.02] border border-white/5 rounded-xl p-4 relative space-y-3">
-      <button type="button" class="removeSubLineItemBtn absolute top-3 right-3 text-white/20 hover:text-red-400 transition" title="Remove this line">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pr-6">
+    <div class="sub-line-item bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-4 py-3">
+        <button type="button" class="toggleSubBtn flex items-center gap-2 text-sm text-white/70 hover:text-white transition text-left flex-1 min-w-0">
+          <svg class="subChevron rotate-90 transition-transform shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          <span class="summaryText truncate">New line — fill in details below</span>
+        </button>
+        <span class="summaryAmount font-bold text-sm shrink-0">Rs 0.00</span>
+        <button type="button" class="removeSubLineItemBtn text-white/20 hover:text-red-400 transition shrink-0" title="Remove this line">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="subLineDetails px-4 pb-4 space-y-3">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="space-y-1">
           <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">End Client</label>
           <input list="endClientList" class="endClientInput aurix-input w-full rounded-lg px-3 py-2 text-sm" placeholder="e.g. Pranav" />
@@ -267,6 +281,7 @@
           <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Amount</label>
           <div class="amountDisplay aurix-input w-full rounded-lg px-3 py-2 text-sm bg-white/[0.02] text-white/70 font-semibold">Rs 0.00</div>
         </div>
+      </div>
       </div>
     </div>
   </template>

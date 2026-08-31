@@ -61,6 +61,9 @@
     const clientSelect = group.querySelector(".groupClientSelect");
     const addSubBtn = group.querySelector(".addSubLineItemBtn");
     const removeGroupBtn = group.querySelector(".removeGroupBtn");
+    const toggleGroupBtn = group.querySelector(".toggleGroupBtn");
+    const groupBody = group.querySelector(".groupBody");
+    const groupChevron = group.querySelector(".groupChevron");
 
     fillSelect(clientSelect, clients, "Select a client…");
 
@@ -74,6 +77,11 @@
       if (container.children.length === 1) return; // always keep at least one client group
       group.remove();
       recalcSubmissionTotal();
+    });
+
+    toggleGroupBtn.addEventListener("click", () => {
+      groupBody.classList.toggle("hidden");
+      groupChevron.classList.toggle("rotate-90");
     });
 
     container.appendChild(group);
@@ -109,11 +117,17 @@
 
     const endClientInput = sub.querySelector(".endClientInput");
     const endClientDatalist = sub.querySelector(".endClientDatalist");
+    const workTypeSelect = sub.querySelector(".workTypeSelect");
     const monthSelect = sub.querySelector(".monthSelect");
     const quantityInput = sub.querySelector(".quantityInput");
     const rateInput = sub.querySelector(".rateInput");
     const amountDisplay = sub.querySelector(".amountDisplay");
     const removeBtn = sub.querySelector(".removeSubLineItemBtn");
+    const toggleSubBtn = sub.querySelector(".toggleSubBtn");
+    const subDetails = sub.querySelector(".subLineDetails");
+    const subChevron = sub.querySelector(".subChevron");
+    const summaryText = sub.querySelector(".summaryText");
+    const summaryAmount = sub.querySelector(".summaryAmount");
 
     // unique datalist id per sub-row so multiple rows don't collide
     const datalistId = "endClients_" + Math.random().toString(36).slice(2);
@@ -123,21 +137,42 @@
     fillSelect(monthSelect, monthOptions(12));
     monthSelect.value = currentMonthValue();
 
+    function updateSummary() {
+      const workType = workTypeSelect.value;
+      const endClient = endClientInput.value.trim();
+      const qty = Number(quantityInput.value) || 0;
+      const rate = Number(rateInput.value) || 0;
+
+      const parts = [workType || "Select work type…"];
+      if (endClient) parts.push(endClient);
+      parts.push(`Qty ${qty} × ${currency(rate)}`);
+      summaryText.textContent = parts.join(" · ");
+      summaryAmount.textContent = currency(qty * rate);
+    }
+
     function recalcAmount() {
       const qty = Number(quantityInput.value) || 0;
       const rate = Number(rateInput.value) || 0;
       amountDisplay.textContent = currency(qty * rate);
+      updateSummary();
       recalcGroupSubtotal(group);
       recalcSubmissionTotal();
     }
     quantityInput.addEventListener("input", recalcAmount);
     rateInput.addEventListener("input", recalcAmount);
+    endClientInput.addEventListener("input", updateSummary);
+    workTypeSelect.addEventListener("change", updateSummary);
 
     removeBtn.addEventListener("click", () => {
       if (subContainer.children.length === 1) return; // always keep at least one line per client
       sub.remove();
       recalcGroupSubtotal(group);
       recalcSubmissionTotal();
+    });
+
+    toggleSubBtn.addEventListener("click", () => {
+      subDetails.classList.toggle("hidden");
+      subChevron.classList.toggle("rotate-90");
     });
 
     subContainer.appendChild(sub);
@@ -148,13 +183,15 @@
   // ============================== Totals ==============================
 
   function recalcGroupSubtotal(group) {
+    const subs = group.querySelectorAll(".sub-line-item");
     let total = 0;
-    group.querySelectorAll(".sub-line-item").forEach((sub) => {
+    subs.forEach((sub) => {
       const qty = Number(sub.querySelector(".quantityInput").value) || 0;
       const rate = Number(sub.querySelector(".rateInput").value) || 0;
       total += qty * rate;
     });
     group.querySelector(".groupSubtotal").textContent = currency(total);
+    group.querySelector(".groupItemCount").textContent = `${subs.length} line${subs.length === 1 ? "" : "s"}`;
   }
 
   function recalcSubmissionTotal() {
