@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurix — Sign Your Invoice</title>
+<link rel="icon" type="image/png" href="assets/logo-mark.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: { aurixnavy: "#04153B", aurixblue: "#0745E0" },
+        fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="assets/styles.css" />
+<style>
+  #signaturePad { touch-action: none; cursor: crosshair; }
+</style>
+</head>
+<body class="min-h-screen font-sans text-white px-6 py-10">
+
+  <div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-white/10">
+        <img src="assets/logo-mark.png" alt="Aurix" class="aurix-logo w-full h-full" />
+      </div>
+      <span class="font-wordmark font-bold text-lg tracking-tight">Aurix</span>
+    </div>
+
+    <div id="loadingState" class="aurix-card rounded-2xl p-8 text-center text-white/50 text-sm">
+      Loading your invoice…
+    </div>
+
+    <div id="errorState" class="hidden aurix-card rounded-2xl p-8 text-center">
+      <p id="errorMessage" class="text-red-400 text-sm"></p>
+    </div>
+
+    <div id="successState" class="hidden aurix-card rounded-2xl p-8 text-center space-y-2">
+      <p class="text-2xl">✅</p>
+      <p class="font-bold">Signed — thank you!</p>
+      <p class="text-white/50 text-sm">A copy has been saved to our records. Your admin will proceed with payment from here.</p>
+    </div>
+
+    <div id="signContent" class="hidden space-y-6">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Review &amp; Sign Your Invoice</h1>
+        <p id="introText" class="text-white/40 text-sm mt-1"></p>
+      </div>
+
+      <div class="aurix-card rounded-2xl p-5">
+        <div class="flex items-center justify-between">
+          <p class="text-white/40 text-xs uppercase tracking-widest font-bold">Total</p>
+          <p id="totalAmount" class="text-2xl font-bold"></p>
+        </div>
+        <div id="lineItemsTable" class="overflow-x-auto mt-4"></div>
+      </div>
+
+      <div class="aurix-card rounded-2xl p-5 space-y-2">
+        <p class="text-white/40 text-xs uppercase tracking-widest font-bold">We'll pay this to</p>
+        <div id="bankDetails" class="text-sm"></div>
+        <p class="text-amber-400/70 text-xs pt-2">If any of this is wrong — amounts or bank details — do not sign. Contact your admin first.</p>
+      </div>
+
+      <div class="aurix-card rounded-2xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-white/40 text-xs uppercase tracking-widest font-bold">Your Signature</p>
+          <button id="clearSignatureBtn" type="button" class="text-xs font-bold text-white/40 hover:text-white transition">Clear</button>
+        </div>
+        <canvas id="signaturePad" class="w-full rounded-xl bg-white" height="180"></canvas>
+        <p class="text-white/30 text-xs">Draw your signature above using your mouse or finger.</p>
+      </div>
+
+      <p id="submitError" class="hidden text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></p>
+
+      <button id="confirmSignBtn" type="button" disabled
+        class="aurix-btn-primary w-full rounded-xl py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+        Confirm & Sign
+      </button>
+    </div>
+  </div>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/sign.js"></script>
+</body>
+</html>

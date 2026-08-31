@@ -32,6 +32,11 @@
   const workTypeClientSelect = document.getElementById("workTypeClientSelect");
   const workTypeAssignmentsEl = document.getElementById("workTypeAssignments");
 
+  const toggleManageTeamBtn = document.getElementById("toggleManageTeam");
+  const manageTeamBody = document.getElementById("manageTeamBody");
+  const manageTeamErrorEl = document.getElementById("manageTeamError");
+  const teamMembersListEl = document.getElementById("teamMembersList");
+
   const { formatMonth } = window.AURIX_DATA;
 
   let allInvoices = [];
@@ -47,8 +52,30 @@
   }
 
   function statusBadge(status) {
-    const cls = status === "Paid" ? "aurix-badge-paid" : status === "Approved" ? "aurix-badge-approved" : "aurix-badge-submitted";
-    return `<span class="aurix-badge ${cls}">${status}</span>`;
+    const classes = {
+      Paid: "aurix-badge-paid",
+      Signed: "aurix-badge-signed",
+      Sent: "aurix-badge-sent",
+      Approved: "aurix-badge-approved",
+    };
+    return `<span class="aurix-badge ${classes[status] || "aurix-badge-submitted"}">${status}</span>`;
+  }
+
+  // Exactly one action per stage — Submitted -> Approved -> Sent -> Signed -> Paid.
+  function renderInvoiceActions(inv) {
+    if (inv.status === "Submitted") {
+      return `<button data-action="Approved" class="statusBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Approve</button>`;
+    }
+    if (inv.status === "Approved") {
+      return `<button class="generateSendBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Generate &amp; Send for Signature</button>`;
+    }
+    if (inv.status === "Sent") {
+      return `<span class="text-white/30 text-xs italic">Waiting for signature…</span>`;
+    }
+    if (inv.status === "Signed") {
+      return `<button data-action="Paid" class="statusBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-green-500 hover:bg-green-500/10 transition">Mark Paid</button>`;
+    }
+    return ""; // Paid — nothing left to do
   }
 
   function populateFilters() {
@@ -200,11 +227,11 @@
             }
             <p class="font-bold text-lg">${currency(inv.total)}</p>
             <div class="flex items-center gap-2">
-              <button data-action="Approved" class="statusBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition disabled:opacity-30 disabled:hover:border-white/10 disabled:hover:bg-transparent disabled:cursor-not-allowed" ${inv.status === "Approved" ? "disabled" : ""}>Approve</button>
-              <button data-action="Paid" class="statusBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-green-500 hover:bg-green-500/10 transition disabled:opacity-30 disabled:hover:border-white/10 disabled:hover:bg-transparent disabled:cursor-not-allowed" ${inv.status === "Paid" ? "disabled" : ""}>Mark Paid</button>
+              ${renderInvoiceActions(inv)}
             </div>
           </div>
         </div>
+        ${inv.pdfUrl ? `<p class="mt-2"><a href="${escapeHtml(inv.pdfUrl)}" target="_blank" rel="noopener" class="text-aurixblue hover:underline text-xs font-semibold">View Signed PDF ↗</a></p>` : ""}
         ${renderLineItemsTable(inv.lineItems)}
         ${inv.notes ? `<div class="mt-4 pt-4 border-t border-white/5"><p class="text-white/30 text-[11px] uppercase tracking-widest font-bold mb-1.5">Notes</p><p class="text-white/60 text-sm whitespace-pre-wrap">${escapeHtml(inv.notes)}</p></div>` : ""}
       </div>
@@ -270,6 +297,26 @@
           errorEl.textContent = err.message || "Could not update that invoice.";
           errorEl.classList.remove("hidden");
           card.querySelectorAll(".statusBtn").forEach((b) => (b.disabled = false));
+        }
+      });
+    });
+
+    listEl.querySelectorAll(".generateSendBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const card = btn.closest("[data-invoice-id]");
+        const invoiceId = card.dataset.invoiceId;
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        try {
+          await window.AurixApi.generateAndSendInvoice(invoiceId);
+          const target = allInvoices.find((i) => i.invoiceId === invoiceId);
+          if (target) target.status = "Sent";
+          render();
+        } catch (err) {
+          errorEl.textContent = err.message || "Could not send that invoice for signature.";
+          errorEl.classList.remove("hidden");
+          btn.disabled = false;
+          btn.textContent = "Generate & Send for Signature";
         }
       });
     });
@@ -476,6 +523,81 @@
     } finally {
       addWorkTypeBtn.disabled = false;
     }
+  });
+
+  // ============================== Manage Team ==============================
+
+  function renderTeamMembers(members) {
+    const sorted = [...members].sort((a, b) => (a.fullName || a.username).localeCompare(b.fullName || b.username));
+    teamMembersListEl.innerHTML = sorted.map((m) => `
+      <div class="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-3" data-username="${escapeHtml(m.username)}">
+        <p class="text-sm font-bold">${escapeHtml(m.fullName || m.username)} <span class="text-white/30 font-normal text-xs">· ${escapeHtml(m.role)}</span></p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Email</label>
+            <input type="email" class="teamEmailInput aurix-input w-full rounded-lg px-3 py-2 text-sm" placeholder="name@example.com" value="${escapeHtml(m.email)}" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Bank Name</label>
+            <input type="text" class="teamBankNameInput aurix-input w-full rounded-lg px-3 py-2 text-sm" value="${escapeHtml(m.bankName)}" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Account Title</label>
+            <input type="text" class="teamBankTitleInput aurix-input w-full rounded-lg px-3 py-2 text-sm" value="${escapeHtml(m.bankAccountTitle)}" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Account Number</label>
+            <input type="text" class="teamBankAccountInput aurix-input w-full rounded-lg px-3 py-2 text-sm" value="${escapeHtml(m.bankAccountNumber)}" />
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="saveTeamMemberBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Save</button>
+          <span class="teamSavedNote text-xs text-green-400 hidden">Saved</span>
+        </div>
+      </div>
+    `).join("");
+
+    teamMembersListEl.querySelectorAll(".saveTeamMemberBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const card = btn.closest("[data-username]");
+        const savedNote = card.querySelector(".teamSavedNote");
+        savedNote.classList.add("hidden");
+        btn.disabled = true;
+        try {
+          await window.AurixApi.updateTeamMember({
+            username: card.dataset.username,
+            email: card.querySelector(".teamEmailInput").value.trim(),
+            bankName: card.querySelector(".teamBankNameInput").value.trim(),
+            bankAccountTitle: card.querySelector(".teamBankTitleInput").value.trim(),
+            bankAccountNumber: card.querySelector(".teamBankAccountInput").value.trim(),
+          });
+          savedNote.classList.remove("hidden");
+        } catch (err) {
+          manageTeamErrorEl.textContent = err.message || "Could not save that person's details.";
+          manageTeamErrorEl.classList.remove("hidden");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function loadTeamMembers() {
+    manageTeamErrorEl.classList.add("hidden");
+    try {
+      const data = await window.AurixApi.getTeamMembers();
+      renderTeamMembers((data && data.members) || []);
+    } catch (err) {
+      manageTeamErrorEl.textContent = err.message || "Could not load the team list.";
+      manageTeamErrorEl.classList.remove("hidden");
+    }
+  }
+
+  toggleManageTeamBtn.addEventListener("click", () => {
+    const isHidden = manageTeamBody.classList.contains("hidden");
+    manageTeamBody.classList.toggle("hidden");
+    toggleManageTeamBtn.textContent = isHidden ? "Hide" : "Show";
+    if (isHidden) loadTeamMembers();
   });
 
   window.AurixAdmin = {

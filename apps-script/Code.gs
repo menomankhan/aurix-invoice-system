@@ -13,6 +13,12 @@
 const JWT_SECRET = "PASTE_YOUR_JWT_SECRET_HERE";
 const SESSION_SECONDS = 60 * 60 * 12; // 12-hour login session
 
+// Run setupInvoiceTemplate() once (Apps Script editor → select it from the
+// function dropdown → Run), then copy the Document ID it logs in here.
+const INVOICE_TEMPLATE_DOC_ID = "PASTE_TEMPLATE_DOC_ID_HERE";
+const SIGNED_INVOICES_FOLDER_NAME = "Aurix Signed Invoices";
+const FRONTEND_BASE_URL = "https://menomankhan.github.io/aurix-invoice-system";
+
 // ============================== HTTP entry points ==============================
 
 function doPost(e) {
@@ -37,6 +43,11 @@ function doPost(e) {
       case "grantResubmitSlot": result = handleGrantResubmitSlot(body); break;
       case "adminUpdateLineItem": result = handleAdminUpdateLineItem(body); break;
       case "adminDeleteLineItem": result = handleAdminDeleteLineItem(body); break;
+      case "getTeamMembers": result = handleGetTeamMembers(body); break;
+      case "updateTeamMember": result = handleUpdateTeamMember(body); break;
+      case "generateAndSendInvoice": result = handleGenerateAndSendInvoice(body); break;
+      case "getSignableInvoice": result = handleGetSignableInvoice(body); break;
+      case "submitSignature": result = handleSubmitSignature(body); break;
       default: throw new Error("Unknown action");
     }
     return jsonResponse(result);
@@ -172,7 +183,7 @@ function handleMyInvoices(body) {
   const auth = requireAuth(body);
   const lineItems = readRows("LineItems").filter(function (r) { return r.username === auth.username; });
   const invoiceRecords = readRows("Invoices").filter(function (r) { return r.username === auth.username; });
-  return { invoices: buildInvoiceList(lineItems, invoiceRecords, {}) };
+  return { invoices: buildInvoiceList(lineItems, invoiceRecords, {}, buildPdfUrlMap()) };
 }
 
 function handleAdminInvoices(body) {
@@ -184,9 +195,25 @@ function handleAdminInvoices(body) {
   const fullNameByUsername = {};
   users.forEach(function (u) { fullNameByUsername[u.username] = u.fullName; });
 
-  return { invoices: buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername) };
+  return { invoices: buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername, buildPdfUrlMap()) };
 }
 
+// Latest signed PDF per invoice, so both My Invoices and Admin can show a
+// "View Signed PDF" link once one exists.
+function buildPdfUrlMap() {
+  const map = {};
+  readRows("Signatures").forEach(function (r) {
+    if (r.invoiceId && r.status === "Signed" && r.pdfUrl) map[r.invoiceId] = r.pdfUrl;
+  });
+  return map;
+}
+
+// The full lifecycle is Submitted -> Approved -> Sent -> Signed -> Paid.
+// This action only ever drives the two manual steps (Approve, Mark Paid) —
+// Sent/Signed are set exclusively by handleGenerateAndSendInvoice and
+// handleSubmitSignature, since those states mean something real actually
+// happened (an email went out, a signature was captured), not just an
+// admin's manual say-so.
 function handleUpdateStatus(body) {
   requireAdmin(body);
   const invoiceId = body.invoiceId;
@@ -197,12 +224,298 @@ function handleUpdateStatus(body) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const updated = updateFields("Invoices", "id", invoiceId, { status: status, updatedAt: new Date().toISOString() });
-    if (!updated) throw new Error("Invoice not found");
+    const current = findRow(readRows("Invoices"), "id", invoiceId);
+    if (!current) throw new Error("Invoice not found");
+    if (status === "Paid" && current.status !== "Signed") {
+      throw new Error("This invoice must be signed before it can be marked Paid.");
+    }
+    updateFields("Invoices", "id", invoiceId, { status: status, updatedAt: new Date().toISOString() });
     return { success: true };
   } finally {
     lock.releaseLock();
   }
+}
+
+// Users tab gains email/bank columns, editable only by the admin (team
+// members never see or touch this themselves). Passwords are never
+// touched by this pair of actions.
+function handleGetTeamMembers(body) {
+  requireAdmin(body);
+  const users = readRows("Users");
+  return {
+    members: users.map(function (u) {
+      return {
+        username: u.username,
+        fullName: u.fullName,
+        role: u.role,
+        active: String(u.active).toUpperCase() === "TRUE",
+        email: u.email || "",
+        bankName: u.bankName || "",
+        bankAccountTitle: u.bankAccountTitle || "",
+        bankAccountNumber: u.bankAccountNumber || "",
+      };
+    }),
+  };
+}
+
+function handleUpdateTeamMember(body) {
+  requireAdmin(body);
+  const username = String(body.username || "").trim();
+  if (!username) throw new Error("Missing username");
+
+  const updated = updateFields("Users", "username", username, {
+    email: String(body.email || "").trim(),
+    bankName: String(body.bankName || "").trim(),
+    bankAccountTitle: String(body.bankAccountTitle || "").trim(),
+    bankAccountNumber: String(body.bankAccountNumber || "").trim(),
+  });
+  if (!updated) throw new Error("User not found");
+  return { success: true };
+}
+
+// Kicks off the sign-off flow: records a one-time sign token (separate from
+// login JWTs — this one is the entire auth for the two public actions
+// below) and emails the team member a link. The actual invoice document
+// isn't built yet at this point — it's built fresh at the moment they sign,
+// off whatever the live data says then, so an admin edit made after sending
+// but before signing is never missed.
+function handleGenerateAndSendInvoice(body) {
+  requireAdmin(body);
+  const invoiceId = body.invoiceId;
+  if (!invoiceId) throw new Error("Missing invoiceId");
+
+  const invoice = findRow(readRows("Invoices"), "id", invoiceId);
+  if (!invoice) throw new Error("Invoice not found");
+  if (String(invoice.status) !== "Approved") throw new Error("Only an Approved invoice can be sent for signature");
+
+  const user = findRow(readRows("Users"), "username", invoice.username);
+  if (!user || !user.email) throw new Error("This person has no email on file yet — add it in Manage Team first.");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const signToken = Utilities.getUuid();
+    appendRow("Signatures", {
+      id: Utilities.getUuid(),
+      invoiceId: invoiceId,
+      username: invoice.username,
+      signToken: signToken,
+      status: "Pending",
+      sentAt: new Date().toISOString(),
+      signedAt: "",
+      pdfUrl: "",
+    });
+
+    updateFields("Invoices", "id", invoiceId, { status: "Sent", updatedAt: new Date().toISOString() });
+
+    const signUrl = FRONTEND_BASE_URL + "/sign.html?token=" + encodeURIComponent(signToken);
+    const monthLabel = formatMonthLabel(invoice.month);
+    MailApp.sendEmail({
+      to: user.email,
+      subject: "Aurix — please review and sign your invoice for " + monthLabel,
+      htmlBody:
+        "<p>Hi " + escapeHtmlForEmail(user.fullName) + ",</p>" +
+        "<p>Your invoice for <strong>" + escapeHtmlForEmail(monthLabel) + "</strong> has been approved. " +
+        "Please review the line items and your bank details, then sign to confirm everything is correct:</p>" +
+        "<p><a href=\"" + signUrl + "\">Review &amp; sign your invoice</a></p>" +
+        "<p>If anything looks wrong, contact Noman directly before signing — don't sign an invoice you haven't checked.</p>" +
+        "<p>— Aurix Productions</p>",
+    });
+
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Public (no login) — the sign token itself is the only credential here,
+// so treat it like a password: it's a random UUID, not guessable, and this
+// action only ever reveals one specific person's own already-approved data.
+function handleGetSignableInvoice(body) {
+  const signToken = body.signToken;
+  if (!signToken) throw new Error("Missing sign token");
+
+  const sig = findRow(readRows("Signatures"), "signToken", signToken);
+  if (!sig) throw new Error("This link isn't valid. Ask your admin to resend it.");
+  if (String(sig.status) !== "Pending") throw new Error("This invoice has already been signed.");
+
+  const invoice = findRow(readRows("Invoices"), "id", sig.invoiceId);
+  if (!invoice) throw new Error("Invoice not found.");
+  const user = findRow(readRows("Users"), "username", sig.username);
+
+  const lineItems = readRows("LineItems")
+    .filter(function (r) { return r.invoiceId === sig.invoiceId; })
+    .map(function (r) {
+      return {
+        client: r.client, endClient: r.endClient, workType: r.workType, description: r.description,
+        quantity: Number(r.quantity) || 0, rate: Number(r.rate) || 0, amount: Number(r.amount) || 0,
+      };
+    });
+
+  return {
+    fullName: user ? user.fullName : sig.username,
+    month: formatMonthLabel(invoice.month),
+    lineItems: lineItems,
+    total: Number(invoice.total) || 0,
+    bankName: (user && user.bankName) || "",
+    bankAccountTitle: (user && user.bankAccountTitle) || "",
+    bankAccountNumber: (user && user.bankAccountNumber) || "",
+  };
+}
+
+// Public (no login) — builds the actual signed PDF at this moment (not at
+// send time), embeds the drawn signature image, saves it privately to
+// Drive (never public-link-shared, since it carries a bank account
+// number), and marks both the Signatures row and the Invoice itself as
+// Signed.
+function handleSubmitSignature(body) {
+  const signToken = body.signToken;
+  const signatureImage = body.signatureImage;
+  if (!signToken || !signatureImage) throw new Error("Missing token or signature");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sig = findRow(readRows("Signatures"), "signToken", signToken);
+    if (!sig) throw new Error("This link isn't valid.");
+    if (String(sig.status) !== "Pending") throw new Error("This invoice has already been signed.");
+
+    const invoice = findRow(readRows("Invoices"), "id", sig.invoiceId);
+    if (!invoice) throw new Error("Invoice not found.");
+    const user = findRow(readRows("Users"), "username", sig.username);
+    const lineItems = readRows("LineItems").filter(function (r) { return r.invoiceId === sig.invoiceId; });
+
+    const pdfUrl = generateSignedInvoicePdf(invoice, user, lineItems, signatureImage);
+
+    updateFields("Signatures", "signToken", signToken, {
+      status: "Signed",
+      signedAt: new Date().toISOString(),
+      pdfUrl: pdfUrl,
+    });
+    updateFields("Invoices", "id", sig.invoiceId, { status: "Signed", updatedAt: new Date().toISOString() });
+
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function generateSignedInvoicePdf(invoice, user, lineItems, signatureImageDataUrl) {
+  const fullName = user ? user.fullName : invoice.username;
+  const monthLabel = formatMonthLabel(invoice.month);
+  const total = Number(invoice.total) || 0;
+
+  const templateFile = DriveApp.getFileById(INVOICE_TEMPLATE_DOC_ID);
+  const copyFile = templateFile.makeCopy("Aurix Invoice — " + fullName + " — " + monthLabel);
+  const doc = DocumentApp.openById(copyFile.getId());
+  const docBody = doc.getBody();
+
+  docBody.replaceText("{{fullName}}", fullName);
+  docBody.replaceText("{{month}}", monthLabel);
+  docBody.replaceText("{{invoiceId}}", invoice.id);
+  docBody.replaceText("{{total}}", "Rs " + total.toLocaleString());
+  docBody.replaceText("{{bankName}}", (user && user.bankName) || "—");
+  docBody.replaceText("{{bankAccountTitle}}", (user && user.bankAccountTitle) || "—");
+  docBody.replaceText("{{bankAccountNumber}}", (user && user.bankAccountNumber) || "—");
+  docBody.replaceText("{{dateGenerated}}", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMMM d, yyyy"));
+
+  const tableData = [["Client", "End Client", "Work Type", "Description", "Qty", "Rate", "Amount"]];
+  lineItems.forEach(function (li) {
+    tableData.push([
+      li.client, li.endClient || "—", li.workType, li.description || "—",
+      String(li.quantity), "Rs " + (Number(li.rate) || 0).toLocaleString(), "Rs " + (Number(li.amount) || 0).toLocaleString(),
+    ]);
+  });
+  insertAtPlaceholder(docBody, "{{LINE_ITEMS_TABLE}}", function (index) {
+    docBody.insertTable(index, tableData);
+  });
+
+  const imageBytes = Utilities.base64Decode(String(signatureImageDataUrl).split(",").pop());
+  const imageBlob = Utilities.newBlob(imageBytes, "image/png", "signature.png");
+  insertAtPlaceholder(docBody, "{{SIGNATURE}}", function (index) {
+    docBody.insertImage(index, imageBlob).setWidth(180).setHeight(70);
+  });
+
+  doc.saveAndClose();
+
+  const pdfBlob = DriveApp.getFileById(copyFile.getId()).getAs(MimeType.PDF);
+  const folder = getOrCreateSignedInvoicesFolder();
+  const pdfFile = folder.createFile(pdfBlob).setName("Aurix Invoice — " + fullName + " — " + monthLabel + ".pdf");
+
+  // The Doc copy was only scratch space to build the PDF from — discard it,
+  // keep just the PDF as the permanent record.
+  DriveApp.getFileById(copyFile.getId()).setTrashed(true);
+
+  return pdfFile.getUrl();
+}
+
+function insertAtPlaceholder(docBody, placeholder, insertFn) {
+  const found = docBody.findText(placeholder);
+  if (!found) return;
+  const element = found.getElement();
+  const parent = element.getParent();
+  const index = docBody.getChildIndex(parent);
+  insertFn(index);
+  parent.removeFromParent();
+}
+
+function getOrCreateSignedInvoicesFolder() {
+  const existing = DriveApp.getFoldersByName(SIGNED_INVOICES_FOLDER_NAME);
+  if (existing.hasNext()) return existing.next();
+  return DriveApp.createFolder(SIGNED_INVOICES_FOLDER_NAME);
+}
+
+function formatMonthLabel(monthValue) {
+  const parts = String(monthValue).split("-");
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), "MMMM yyyy");
+}
+
+function escapeHtmlForEmail(str) {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Run this ONCE from the Apps Script editor (select "setupInvoiceTemplate"
+// from the function dropdown at the top, click Run) to build the invoice
+// template Doc. Copy the Document ID it logs (View → Logs, or Ctrl/Cmd+Enter)
+// into INVOICE_TEMPLATE_DOC_ID at the top of this file, then redeploy.
+function setupInvoiceTemplate() {
+  const doc = DocumentApp.create("Aurix Invoice Template");
+  const body = doc.getBody();
+  body.setMarginTop(40).setMarginBottom(40).setMarginLeft(50).setMarginRight(50);
+
+  const brandBlue = "#0745E0";
+  const darkText = "#0D1B3E";
+
+  body.appendParagraph("AURIX PRODUCTIONS").setFontSize(20).setBold(true).setForegroundColor(darkText);
+  body.appendParagraph("Creating Systems that Sustain").setFontSize(9).setForegroundColor("#888888");
+  body.appendParagraph("");
+  body.appendParagraph("INVOICE").setFontSize(16).setBold(true).setForegroundColor(brandBlue);
+  body.appendParagraph("Invoice ID: {{invoiceId}}").setFontSize(10);
+  body.appendParagraph("Period: {{month}}").setFontSize(10);
+  body.appendParagraph("Generated: {{dateGenerated}}").setFontSize(10);
+  body.appendParagraph("");
+  body.appendParagraph("Team Member: {{fullName}}").setFontSize(12).setBold(true);
+  body.appendParagraph("");
+  body.appendParagraph("{{LINE_ITEMS_TABLE}}").setFontSize(10);
+  body.appendParagraph("");
+  body.appendParagraph("Total Due: {{total}}").setFontSize(13).setBold(true).setForegroundColor(brandBlue);
+  body.appendParagraph("");
+  body.appendParagraph("Payment Details").setFontSize(12).setBold(true);
+  body.appendParagraph("Bank Name: {{bankName}}").setFontSize(10);
+  body.appendParagraph("Account Title: {{bankAccountTitle}}").setFontSize(10);
+  body.appendParagraph("Account Number: {{bankAccountNumber}}").setFontSize(10);
+  body.appendParagraph("");
+  body.appendParagraph("By signing below, I confirm the amounts and payment details above are correct.").setFontSize(9).setItalic(true);
+  body.appendParagraph("");
+  body.appendParagraph("Signature:").setFontSize(10).setBold(true);
+  body.appendParagraph("{{SIGNATURE}}").setFontSize(10);
+  body.appendParagraph("Signed on: {{dateGenerated}}").setFontSize(9).setForegroundColor("#888888");
+
+  doc.saveAndClose();
+  Logger.log("Template created. Document ID: " + doc.getId());
+  Logger.log("Copy this ID into INVOICE_TEMPLATE_DOC_ID at the top of Code.gs, then redeploy.");
+  return doc.getId();
 }
 
 // Unlocks exactly one more submission for a person+month that's already
@@ -416,7 +729,7 @@ function handleUnassignClientWorkType(body) {
 
 // ============================== Shared helpers ==============================
 
-function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername) {
+function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername, pdfUrlByInvoiceId) {
   const byId = {};
   invoiceRecords.forEach(function (r) { byId[r.id] = r; });
 
@@ -444,6 +757,7 @@ function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername) {
       status: rec ? rec.status : "Submitted",
       notes: rec ? String(rec.notes || "") : "",
       locked: rec ? isLocked(rec) : false,
+      pdfUrl: (pdfUrlByInvoiceId && pdfUrlByInvoiceId[invoiceId]) || "",
     };
     if (fullNameByUsername && fullNameByUsername[username]) entry.fullName = fullNameByUsername[username];
     return entry;

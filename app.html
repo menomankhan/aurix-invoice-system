@@ -169,6 +169,18 @@
         </div>
       </div>
 
+      <div class="aurix-card rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold">Manage Team</h2>
+          <button id="toggleManageTeam" type="button" class="text-xs font-bold text-white/50 hover:text-white transition">Show</button>
+        </div>
+        <div id="manageTeamBody" class="hidden space-y-4">
+          <p class="text-white/40 text-xs">Email and bank details are only visible to you here — team members never see or edit this themselves. An email is required before you can send someone an invoice for signature.</p>
+          <p id="manageTeamError" class="hidden text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></p>
+          <div id="teamMembersList" class="space-y-3"></div>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <select id="filterPerson" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
           <option value="">All People</option>
@@ -183,6 +195,8 @@
           <option value="">All Statuses</option>
           <option value="Submitted">Submitted</option>
           <option value="Approved">Approved</option>
+          <option value="Sent">Sent</option>
+          <option value="Signed">Signed</option>
           <option value="Paid">Paid</option>
         </select>
       </div>

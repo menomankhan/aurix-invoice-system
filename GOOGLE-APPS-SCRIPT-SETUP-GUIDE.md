@@ -168,3 +168,62 @@ Now enforced: each person gets exactly one submission per month. Once they submi
 - Every line item has **Edit** (turns that row into editable fields — client, end client, work type, description, qty, rate — with Save/Cancel) and **Delete** (asks to confirm, then removes it). Both instantly recalculate the invoice's total.
 
 **Important nuance**: an existing invoice from before this update has no recorded lock state, so it defaults to **locked** the first time you see it (since it already has line items, meaning that person already submitted). If someone genuinely needs to add more for an old month, just click **Allow Resubmit** on it once.
+
+---
+
+## Update: Bank details, invoice generation, email, and signing
+
+The full lifecycle is now **Submitted → Approved → Sent → Signed → Paid**. Once you approve an invoice, you can generate a proper invoice document, email it to that person, and they sign it (draw a signature) after reviewing the amounts and their bank details — only then can you mark it Paid. Every signed invoice is saved as a permanent PDF in your Drive.
+
+This is the biggest update so far — more setup steps than usual, so follow them in order.
+
+### 1. Add a new sheet tab
+
+**File → Import → Upload** → `sheet-templates/Signatures.csv` → **Insert new sheet**. Leave it empty (headers only) — it fills up as invoices get signed.
+
+### 2. Add 4 columns to your existing `Users` tab
+
+Same pattern as `notes`/`locked` before — add these as new column headers in row 1: `email`, `bankName`, `bankAccountTitle`, `bankAccountNumber`. Leave the rows under them blank for now — you'll fill them in from the app itself in Step 6, not by typing into the sheet.
+
+### 3. Update the backend code
+
+Paste the current [apps-script/Code.gs](apps-script/Code.gs) into the Apps Script editor (real `JWT_SECRET` back in) and save — but **don't deploy yet**, do Step 4 first.
+
+### 4. Build the invoice template (one-time, automatic)
+
+You don't design this by hand — a function in the code builds it for you:
+
+1. In the Apps Script editor, find the function dropdown at the top (next to Debug) — select **setupInvoiceTemplate**.
+2. Click **Run** (▶️).
+3. The first time, Google will ask you to authorize new permissions (this script now needs to touch Drive, Docs, and send email — that's expected, click through **Review permissions → your account → Advanced → Go to Aurix Backend (unsafe) → Allow**, same as the very first authorization you did).
+4. Once it finishes, go to **View → Logs** (or press Ctrl/Cmd+Enter). You'll see a line like:
+   ```
+   Template created. Document ID: 1AbCdEfGhIjKlMnOpQrStUvWxYz...
+   ```
+   Copy that ID.
+5. Back at the top of `Code.gs`, replace `PASTE_TEMPLATE_DOC_ID_HERE` with the ID you copied.
+6. A new file called "Aurix Invoice Template" now exists in your Google Drive root — you can open it and adjust the wording/styling if you want (just don't remove or rename the `{{...}}` placeholder tags — those get filled in automatically).
+
+### 5. Deploy
+
+**Deploy → Manage deployments** → pencil icon → **New version** → **Deploy**.
+
+### 6. Add everyone's email and bank details
+
+In the app: **Admin → Manage Team → Show**. For each person, fill in their **Email**, **Bank Name**, **Account Title**, and **Account Number**, then click **Save** for that row. An email is required before you can send that person an invoice — everything else is optional but needed before they can actually get paid.
+
+### 7. Try it once yourself before rolling it out
+
+1. Get one of your own invoices to **Approved** status.
+2. Click **Generate & Send for Signature** on it.
+3. Check your email for the link, open it, review the amounts and bank details, draw a signature, click **Confirm & Sign**.
+4. Back in Admin, that invoice should now show **Signed** with a **View Signed PDF** link, and a **Mark Paid** button.
+
+**Where things live:**
+- Signed PDFs are saved to a folder called **"Aurix Signed Invoices"** in your Drive — created automatically the first time someone signs. These are **private to your Drive account only**, never publicly shared (they contain bank account numbers), so the "View Signed PDF ↗" link in Admin only works when you're signed into the same Google account that owns the script.
+- The sign-off page (`sign.html`) needs no login — the link itself, with its one-time token, is what grants access to that one specific invoice.
+- Emails send via your own Google account's daily quota (Gmail accounts get a few hundred a day) — far more than a 10-person team will ever need in a day.
+
+**A couple of deliberate design choices worth knowing:**
+- The invoice document is built fresh at the moment someone signs, not when you click Send — so if you edit a line item after sending but before they've signed, they'll see the corrected numbers, not stale ones.
+- You can't mark an invoice Paid until it's Signed — the backend enforces this even if something tries to skip a step.

@@ -5,7 +5,8 @@
   assets/work-types-store.js).
 */
 window.AURIX_DATA = {
-  STATUSES: ["Submitted", "Approved", "Paid"],
+  // Full lifecycle: Submitted -> Approved -> Sent -> Signed -> Paid.
+  STATUSES: ["Submitted", "Approved", "Sent", "Signed", "Paid"],
 };
 
 // Returns "2026-08" for the current month (used as the default selection
