@@ -26,6 +26,9 @@ function doPost(e) {
       case "myInvoices": result = handleMyInvoices(body); break;
       case "adminInvoices": result = handleAdminInvoices(body); break;
       case "updateStatus": result = handleUpdateStatus(body); break;
+      case "getClients": result = handleGetClients(body); break;
+      case "addClient": result = handleAddClient(body); break;
+      case "deleteClientRow": result = handleDeleteClientRow(body); break;
       default: throw new Error("Unknown action");
     }
     return jsonResponse(result);
@@ -163,6 +166,66 @@ function handleUpdateStatus(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// Clients tab: one row per client (endClient blank) registers the client
+// itself; one row per (client, endClient) pair registers an end-client
+// suggestion under that client. Any logged-in user can read this list (the
+// Submit form needs it); only admins can add or remove rows.
+
+function handleGetClients(body) {
+  requireAuth(body);
+  const rows = readRows("Clients");
+
+  const clients = [];
+  const seen = {};
+  rows.forEach(function (r) {
+    if (r.client && !seen[r.client]) { seen[r.client] = true; clients.push(r.client); }
+  });
+
+  const endClients = {};
+  rows.forEach(function (r) {
+    if (!r.client || !r.endClient) return;
+    if (!endClients[r.client]) endClients[r.client] = [];
+    endClients[r.client].push(r.endClient);
+  });
+
+  // `rows` carries the real per-row id so the Admin panel can delete an
+  // exact row; `clients`/`endClients` stay grouped for the Submit form.
+  return {
+    clients: clients,
+    endClients: endClients,
+    rows: rows.map(function (r) { return { id: r.id, client: r.client, endClient: r.endClient || "" }; }),
+  };
+}
+
+function handleAddClient(body) {
+  requireAdmin(body);
+  const client = String(body.client || "").trim();
+  const endClient = String(body.endClient || "").trim();
+  if (!client) throw new Error("Client name is required");
+
+  appendRow("Clients", { id: Utilities.getUuid(), client: client, endClient: endClient });
+  return { success: true };
+}
+
+function handleDeleteClientRow(body) {
+  requireAdmin(body);
+  const id = body.id;
+  if (!id) throw new Error("Missing id");
+
+  const sheet = getSheet("Clients");
+  const headers = getHeaders(sheet);
+  const idIdx = headers.indexOf("id");
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  throw new Error("Not found");
 }
 
 // ============================== Shared helpers ==============================

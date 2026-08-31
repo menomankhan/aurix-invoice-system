@@ -59,5 +59,14 @@ window.AurixApi = (function () {
     updateInvoiceStatus(invoiceId, status) {
       return call("updateStatus", { invoiceId, status });
     },
+    getClients() {
+      return call("getClients", {});
+    },
+    addClient(client, endClient) {
+      return call("addClient", { client, endClient });
+    },
+    deleteClientRow(id) {
+      return call("deleteClientRow", { id });
+    },
   };
 })();

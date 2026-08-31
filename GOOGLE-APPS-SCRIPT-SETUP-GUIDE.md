@@ -122,3 +122,16 @@ The Web App URL stays the same — you don't need to update `config.js` again af
 **Changes to Code.gs don't seem to show up** → You need to create a **new version** under **Manage deployments** (see "Updating the backend later" above) — just saving the file isn't enough to update the live `/exec` URL.
 
 **Someone sees data that isn't theirs** → This should never happen. Stop and check that `requireAuth`/`requireAdmin` in `Code.gs` weren't edited, and that every handler filters by `auth.username` before returning data. Treat this as urgent if it occurs.
+
+---
+
+## Update: Manage Clients from the Admin view
+
+Clients used to be hardcoded in `assets/data.js` (needed a code change every time). They now live in the Sheet, with an Admin UI to add/remove them — no code changes ever needed for a new client. If your system is already deployed, apply this update:
+
+1. **Add a `Clients` tab to your Google Sheet**: same pattern as before — **File → Import → Upload** → `sheet-templates/Clients.csv` → **Insert new sheet**. It comes pre-filled with your existing 5 clients and Kratos's 3 end-clients, so nothing is lost.
+2. **Update the backend**: open **Extensions → Apps Script**, select all the existing code, delete it, and paste in the current [apps-script/Code.gs](apps-script/Code.gs) (your `JWT_SECRET` line needs the real value again, same as the first time — copy it from `credentials-DO-NOT-COMMIT.txt`).
+3. **Deploy → Manage deployments** → pencil icon → **Version: New version** → **Deploy**.
+4. Nothing else — the frontend already has the new "Manage Clients" panel (collapsed by default, on the Admin page — click **Show**).
+
+To use it: as Noman, go to **Admin → Manage Clients → Show**, type a client name (and optionally an end-client under it), click **Add**. It appears in everyone's Submit form immediately, no page reload needed for people who open Submit fresh. **Remove** deletes a single row — removing a client's "bare" row doesn't remove its end-clients, and vice versa, so if you want a client fully gone, remove each of its rows.

@@ -117,6 +117,24 @@
         <p class="text-white/40 text-sm mt-1">Every team member's submissions in one place.</p>
       </div>
 
+      <div class="aurix-card rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold">Manage Clients</h2>
+          <button id="toggleManageClients" type="button" class="text-xs font-bold text-white/50 hover:text-white transition">Show</button>
+        </div>
+        <div id="manageClientsBody" class="hidden space-y-4">
+          <p class="text-white/40 text-xs">Clients you add here immediately show up in everyone's Submit form.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-[2fr_2fr_auto] gap-3">
+            <input id="newClientName" type="text" class="aurix-input rounded-xl px-3 py-2.5 text-sm" placeholder="Client name" />
+            <input id="newEndClientName" type="text" class="aurix-input rounded-xl px-3 py-2.5 text-sm" placeholder="End client (optional)" />
+            <button id="addClientBtn" type="button" class="aurix-btn-primary rounded-xl px-5 py-2.5 text-sm font-bold whitespace-nowrap">Add</button>
+          </div>
+          <p id="manageClientsError" class="hidden text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></p>
+          <div id="clientsTable" class="space-y-1.5"></div>
+          <p id="clientsEmpty" class="hidden text-white/30 text-xs">No clients yet — add your first one above.</p>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <select id="filterPerson" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
           <option value="">All People</option>
@@ -203,6 +221,7 @@
   <script src="assets/data.js"></script>
   <script src="assets/auth.js"></script>
   <script src="assets/api.js"></script>
+  <script src="assets/clients-store.js"></script>
   <script src="assets/app.js"></script>
   <script src="assets/submit.js"></script>
   <script src="assets/my-invoices.js"></script>

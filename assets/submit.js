@@ -11,7 +11,7 @@
   const errorEl = document.getElementById("submitError");
   const successEl = document.getElementById("submitSuccess");
 
-  const { CLIENTS, END_CLIENTS, WORK_TYPES, monthOptions, currentMonthValue } = window.AURIX_DATA;
+  const { WORK_TYPES, monthOptions, currentMonthValue } = window.AURIX_DATA;
 
   function currency(n) {
     return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,7 +38,16 @@
     });
   }
 
-  function addLineItem() {
+  async function addLineItem() {
+    let clients = [];
+    let endClients = {};
+    try {
+      ({ clients, endClients } = await window.AurixClientsStore.load());
+    } catch (err) {
+      errorEl.textContent = "Could not load the client list — you can still fill in everything else.";
+      errorEl.classList.remove("hidden");
+    }
+
     const node = template.content.firstElementChild.cloneNode(true);
 
     const clientSelect = node.querySelector(".clientSelect");
@@ -51,7 +60,7 @@
     const amountDisplay = node.querySelector(".amountDisplay");
     const removeBtn = node.querySelector(".removeLineItemBtn");
 
-    fillSelect(clientSelect, CLIENTS, "Select a client…");
+    fillSelect(clientSelect, clients, "Select a client…");
     fillSelect(workTypeSelect, WORK_TYPES, "Select work type…");
     fillSelect(monthSelect, monthOptions(12));
     monthSelect.value = currentMonthValue();
@@ -62,7 +71,7 @@
     endClientInput.setAttribute("list", datalistId);
 
     function refreshEndClientSuggestions() {
-      const suggestions = END_CLIENTS[clientSelect.value] || [];
+      const suggestions = endClients[clientSelect.value] || [];
       endClientDatalist.innerHTML = "";
       suggestions.forEach((name) => {
         const opt = document.createElement("option");

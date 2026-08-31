@@ -13,6 +13,15 @@
   const filterClient = document.getElementById("filterClient");
   const filterStatus = document.getElementById("filterStatus");
 
+  const toggleManageClientsBtn = document.getElementById("toggleManageClients");
+  const manageClientsBody = document.getElementById("manageClientsBody");
+  const newClientNameInput = document.getElementById("newClientName");
+  const newEndClientNameInput = document.getElementById("newEndClientName");
+  const addClientBtn = document.getElementById("addClientBtn");
+  const manageClientsErrorEl = document.getElementById("manageClientsError");
+  const clientsTableEl = document.getElementById("clientsTable");
+  const clientsEmptyEl = document.getElementById("clientsEmpty");
+
   const { formatMonth } = window.AURIX_DATA;
 
   let allInvoices = [];
@@ -156,6 +165,82 @@
   }
 
   [filterPerson, filterMonth, filterClient, filterStatus].forEach((el) => el.addEventListener("change", render));
+
+  // ============================== Manage Clients ==============================
+
+  function renderClientsTable(rawRows) {
+    if (rawRows.length === 0) {
+      clientsTableEl.innerHTML = "";
+      clientsEmptyEl.classList.remove("hidden");
+      return;
+    }
+    clientsEmptyEl.classList.add("hidden");
+
+    const sorted = [...rawRows].sort((a, b) => a.client.localeCompare(b.client) || a.endClient.localeCompare(b.endClient));
+
+    clientsTableEl.innerHTML = sorted.map((row) => `
+      <div class="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-white/[0.02]" data-row-id="${escapeHtml(row.id)}">
+        <p class="text-sm">
+          <span class="font-semibold">${escapeHtml(row.client)}</span>
+          ${row.endClient ? `<span class="text-white/40"> · ${escapeHtml(row.endClient)}</span>` : ""}
+        </p>
+        <button class="deleteClientRowBtn text-white/30 hover:text-red-400 transition text-xs font-bold">Remove</button>
+      </div>
+    `).join("");
+
+    clientsTableEl.querySelectorAll(".deleteClientRowBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest("[data-row-id]");
+        const id = row.dataset.rowId;
+        btn.disabled = true;
+        btn.textContent = "…";
+        try {
+          await window.AurixApi.deleteClientRow(id);
+          await loadClients(true);
+        } catch (err) {
+          manageClientsErrorEl.textContent = err.message || "Could not remove that row.";
+          manageClientsErrorEl.classList.remove("hidden");
+          btn.disabled = false;
+          btn.textContent = "Remove";
+        }
+      });
+    });
+  }
+
+  async function loadClients(force) {
+    const { rows } = await window.AurixClientsStore.load(force);
+    renderClientsTable(rows);
+  }
+
+  toggleManageClientsBtn.addEventListener("click", () => {
+    const isHidden = manageClientsBody.classList.contains("hidden");
+    manageClientsBody.classList.toggle("hidden");
+    toggleManageClientsBtn.textContent = isHidden ? "Hide" : "Show";
+    if (isHidden) loadClients();
+  });
+
+  addClientBtn.addEventListener("click", async () => {
+    manageClientsErrorEl.classList.add("hidden");
+    const client = newClientNameInput.value.trim();
+    const endClient = newEndClientNameInput.value.trim();
+    if (!client) {
+      manageClientsErrorEl.textContent = "Enter a client name first.";
+      manageClientsErrorEl.classList.remove("hidden");
+      return;
+    }
+    addClientBtn.disabled = true;
+    try {
+      await window.AurixApi.addClient(client, endClient);
+      newClientNameInput.value = "";
+      newEndClientNameInput.value = "";
+      await loadClients(true);
+    } catch (err) {
+      manageClientsErrorEl.textContent = err.message || "Could not add that client.";
+      manageClientsErrorEl.classList.remove("hidden");
+    } finally {
+      addClientBtn.disabled = false;
+    }
+  });
 
   window.AurixAdmin = {
     async load() {

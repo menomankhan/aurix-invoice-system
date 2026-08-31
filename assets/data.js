@@ -1,24 +1,10 @@
 /*
   Static dropdown data for the submission form.
-  Edit this file any time you add a client, end client, or work type —
-  no backend change needed, it's just used to render the form.
+  Clients/end-clients are NOT here anymore — the admin manages those from
+  the Admin view, stored in the Clients sheet (see assets/clients-store.js).
+  Work types are still a fixed list; edit here if that ever needs to change.
 */
 window.AURIX_DATA = {
-  CLIENTS: [
-    "Rachad — Kratos Marketing",
-    "Bypith",
-    "Freedom Accelerator",
-    "Podcutz",
-    "Noman Akram",
-  ],
-
-  // End-client suggestions per client. Anything not listed here just gets
-  // a free-text field with no suggestions — add more arrays as you learn
-  // the end-client names for those accounts.
-  END_CLIENTS: {
-    "Rachad — Kratos Marketing": ["Pranav", "OB Lux Properties", "Mohamed Essmat"],
-  },
-
   WORK_TYPES: [
     "Clipping — English",
     "Clipping + Captions — Arabic",
