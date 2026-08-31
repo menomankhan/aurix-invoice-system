@@ -14,7 +14,7 @@
   const { CLIENTS, END_CLIENTS, WORK_TYPES, monthOptions, currentMonthValue } = window.AURIX_DATA;
 
   function currency(n) {
-    return "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function fillSelect(select, options, placeholder) {
