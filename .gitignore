@@ -1,0 +1,10 @@
+# Never publish these — they hold real password hashes + salts (Users.csv)
+# or real temp passwords in plain text (credentials file).
+credentials-DO-NOT-COMMIT.txt
+sheet-templates/Users.csv
+
+# Local Claude Code tooling config — its permission log has ended up echoing
+# real command arguments (including a live password once), so keep it local.
+.claude/
+
+.DS_Store

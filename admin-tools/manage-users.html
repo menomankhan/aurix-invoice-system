@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurix — User Credential Tool (offline)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: { colors: { aurixnavy: "#04153B", aurixblue: "#0745E0" } } } };
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+  input, select { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #fff; }
+  input:focus, select:focus { outline: none; border-color: #0745E0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body class="min-h-screen bg-aurixnavy text-white px-6 py-12">
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <div>
+    <div class="flex items-center gap-2.5 mb-4">
+      <div class="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-white/10">
+        <img src="../assets/logo-mark.png" alt="Aurix" class="w-full h-full object-cover" />
+      </div>
+      <span class="font-bold text-lg tracking-tight">Aurix</span>
+    </div>
+    <h1 class="text-2xl font-bold">User Credential Generator</h1>
+    <p class="text-white/50 text-sm mt-2 leading-relaxed">
+      This page runs <strong>entirely in your browser</strong> — nothing you type here is sent anywhere.
+      Use it to onboard a new team member or reset someone's password: fill in a username and a
+      password (or click "Generate" for a random one), then copy the resulting row into the
+      <span class="mono">Users</span> tab of the Aurix Invoices Google Sheet.
+    </p>
+    <p class="text-amber-400/80 text-xs mt-3 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+      Keep this file private. Don't add it to the public GitHub Pages site — open it locally from your
+      computer whenever you need it (double-click the file).
+    </p>
+  </div>
+
+  <div class="card rounded-2xl p-6 space-y-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Username</label>
+        <input id="username" type="text" class="w-full rounded-xl px-3 py-2.5 text-sm" placeholder="e.g. zohaibali" />
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Full Name</label>
+        <input id="fullName" type="text" class="w-full rounded-xl px-3 py-2.5 text-sm" placeholder="e.g. Zohaib Ali" />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Role</label>
+        <select id="role" class="w-full rounded-xl px-3 py-2.5 text-sm">
+          <option value="member">member</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Password</label>
+        <div class="flex gap-2">
+          <input id="password" type="text" class="flex-1 rounded-xl px-3 py-2.5 text-sm mono" placeholder="Type or generate one" />
+          <button id="genBtn" type="button" class="px-3 rounded-xl border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition text-xs font-bold whitespace-nowrap">Generate</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="computeBtn" type="button" class="w-full bg-aurixblue hover:bg-[#0a52ff] transition rounded-xl py-3 text-sm font-bold">
+      Compute Hash + Salt
+    </button>
+  </div>
+
+  <div id="result" class="card rounded-2xl p-6 space-y-4 hidden">
+    <div>
+      <p class="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-2">1. Give this password to the person directly (Slack DM, in person — not email/public chat)</p>
+      <div class="mono text-lg font-bold" id="outPassword"></div>
+    </div>
+    <div>
+      <p class="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-2">2. Paste this exact row into the Users sheet (Tab-separated — paste directly into cell A of a new row)</p>
+      <textarea id="outRow" readonly class="w-full rounded-xl px-3 py-2.5 text-xs mono h-20 resize-none"></textarea>
+      <button id="copyBtn" type="button" class="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Copy row</button>
+      <span id="copiedNote" class="text-xs text-green-400 ml-2 hidden">Copied!</span>
+    </div>
+    <div class="text-xs text-white/30 grid grid-cols-2 gap-2 mono">
+      <div><span class="text-white/50">passwordHash:</span> <span id="outHash" class="break-all"></span></div>
+      <div><span class="text-white/50">passwordSalt:</span> <span id="outSalt" class="break-all"></span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Must exactly match the hashing done in the Apps Script backend's
+  // hashPassword() function: a single salted HMAC-SHA512, hex-encoded.
+  // (Verified byte-for-byte identical to Node's crypto.createHmac output
+  // for the same password/salt before this tool was shipped.)
+  function toHex(buffer) {
+    return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function randomHex(bytes) {
+    const arr = new Uint8Array(bytes);
+    crypto.getRandomValues(arr);
+    return toHex(arr);
+  }
+
+  function randomPassword(len = 14) {
+    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#%";
+    const arr = new Uint8Array(len);
+    crypto.getRandomValues(arr);
+    let out = "";
+    for (let i = 0; i < len; i++) out += alphabet[arr[i] % alphabet.length];
+    return out;
+  }
+
+  // The salt is used as a literal UTF-8 string here (as the HMAC key), NOT
+  // decoded from hex into raw bytes — this must match the Apps Script side,
+  // where Utilities.computeHmacSignature(HMAC_SHA_512, password, salt) also
+  // treats the salt as a plain string key.
+  async function hmacSha512Hex(password, saltAsString) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw", enc.encode(saltAsString),
+      { name: "HMAC", hash: "SHA-512" }, false, ["sign"]
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(password));
+    return toHex(sig);
+  }
+
+  document.getElementById("genBtn").addEventListener("click", () => {
+    document.getElementById("password").value = randomPassword();
+  });
+
+  document.getElementById("computeBtn").addEventListener("click", async () => {
+    const username = document.getElementById("username").value.trim();
+    const fullName = document.getElementById("fullName").value.trim();
+    const role = document.getElementById("role").value;
+    const password = document.getElementById("password").value;
+
+    if (!username || !fullName || !password) {
+      alert("Fill in username, full name, and password first.");
+      return;
+    }
+
+    const salt = randomHex(16);
+    const hash = await hmacSha512Hex(password, salt);
+
+    document.getElementById("outPassword").textContent = password;
+    document.getElementById("outHash").textContent = hash;
+    document.getElementById("outSalt").textContent = salt;
+    document.getElementById("outRow").value = `${username}\t${hash}\t${salt}\t${fullName}\t${role}\tTRUE`;
+    document.getElementById("result").classList.remove("hidden");
+    document.getElementById("copiedNote").classList.add("hidden");
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    const textarea = document.getElementById("outRow");
+    await navigator.clipboard.writeText(textarea.value);
+    document.getElementById("copiedNote").classList.remove("hidden");
+  });
+</script>
+</body>
+</html>

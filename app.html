@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aurix — Invoices</title>
+<link rel="icon" type="image/png" href="assets/logo-mark.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          aurixnavy: "#04153B",
+          aurixblue: "#0745E0",
+        },
+        fontFamily: {
+          sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body class="min-h-screen font-sans text-white">
+
+  <!-- Nav -->
+  <header class="border-b border-white/10 sticky top-0 z-30 bg-aurixnavy/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-10">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-white/10">
+            <img src="assets/logo-mark.png" alt="Aurix" class="aurix-logo w-full h-full" />
+          </div>
+          <span class="font-wordmark font-bold text-lg tracking-tight">Aurix</span>
+        </div>
+        <nav class="hidden sm:flex items-center gap-7 text-sm font-medium">
+          <a href="#" data-view="submit" class="aurix-nav-link">Submit</a>
+          <a href="#" data-view="my-invoices" class="aurix-nav-link">My Invoices</a>
+          <a href="#" data-view="admin" data-admin-only class="aurix-nav-link hidden">Admin</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="text-right hidden sm:block">
+          <p id="navUserName" class="text-sm font-semibold leading-tight"></p>
+          <p id="navUserRole" class="text-[11px] text-white/40 leading-tight"></p>
+        </div>
+        <button id="logoutBtn" class="text-white/50 hover:text-white transition text-sm font-medium">Log out</button>
+      </div>
+    </div>
+    <!-- mobile nav -->
+    <nav class="sm:hidden flex items-center gap-6 px-6 pb-3 text-sm font-medium">
+      <a href="#" data-view="submit" class="aurix-nav-link">Submit</a>
+      <a href="#" data-view="my-invoices" class="aurix-nav-link">My Invoices</a>
+      <a href="#" data-view="admin" data-admin-only class="aurix-nav-link hidden">Admin</a>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-10">
+
+    <!-- ===================== SUBMIT VIEW ===================== -->
+    <section id="view-submit" class="view space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">New Submission</h1>
+          <p class="text-white/40 text-sm mt-1">Add every line item for this sitting, then submit them together.</p>
+        </div>
+      </div>
+
+      <div id="lineItemsContainer" class="space-y-4"></div>
+
+      <button id="addLineItemBtn" type="button"
+        class="w-full border border-dashed border-white/15 hover:border-aurixblue/60 hover:bg-aurixblue/5 transition rounded-xl py-3 text-sm font-semibold text-white/60 hover:text-white flex items-center justify-center gap-2">
+        <span class="text-lg leading-none">+</span> Add another line item
+      </button>
+
+      <div class="aurix-card rounded-2xl p-5 flex items-center justify-between">
+        <div>
+          <p class="text-white/40 text-xs uppercase tracking-widest font-bold">Submission Total</p>
+          <p id="submissionTotal" class="text-2xl font-bold mt-1">$0.00</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <p id="submitError" class="hidden text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 max-w-xs"></p>
+          <p id="submitSuccess" class="hidden text-green-400 text-xs font-medium bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2"></p>
+          <button id="submitBtn" type="button" class="aurix-btn-primary rounded-xl px-6 py-3 text-sm font-bold flex items-center gap-2">
+            <span id="submitBtnText">Submit Invoice Items</span>
+            <svg id="submitSpinner" class="hidden animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MY INVOICES VIEW ===================== -->
+    <section id="view-my-invoices" class="view space-y-6 hidden">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">My Invoices</h1>
+        <p class="text-white/40 text-sm mt-1">Your submissions, grouped automatically by month.</p>
+      </div>
+
+      <div id="myInvoicesCurrentMonth" class="aurix-card rounded-2xl p-5"></div>
+      <div id="myInvoicesList" class="space-y-4"></div>
+      <p id="myInvoicesEmpty" class="hidden text-white/40 text-sm text-center py-10">No submissions yet.</p>
+      <p id="myInvoicesLoading" class="text-white/40 text-sm text-center py-10">Loading your invoices…</p>
+      <p id="myInvoicesError" class="hidden text-red-400 text-sm text-center py-10"></p>
+    </section>
+
+    <!-- ===================== ADMIN VIEW ===================== -->
+    <section id="view-admin" class="view space-y-6 hidden">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Admin — Team Invoices</h1>
+        <p class="text-white/40 text-sm mt-1">Every team member's submissions in one place.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <select id="filterPerson" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
+          <option value="">All People</option>
+        </select>
+        <select id="filterMonth" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
+          <option value="">All Months</option>
+        </select>
+        <select id="filterClient" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
+          <option value="">All Clients</option>
+        </select>
+        <select id="filterStatus" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
+          <option value="">All Statuses</option>
+          <option value="Submitted">Submitted</option>
+          <option value="Approved">Approved</option>
+          <option value="Paid">Paid</option>
+        </select>
+      </div>
+
+      <div class="aurix-card rounded-2xl p-5 flex items-center justify-between">
+        <div>
+          <p class="text-white/40 text-xs uppercase tracking-widest font-bold">Combined Total (filtered)</p>
+          <p id="adminGrandTotal" class="text-2xl font-bold mt-1">$0.00</p>
+        </div>
+        <p id="adminInvoiceCount" class="text-white/40 text-sm"></p>
+      </div>
+
+      <div id="adminInvoicesList" class="space-y-4"></div>
+      <p id="adminEmpty" class="hidden text-white/40 text-sm text-center py-10">No invoices match these filters.</p>
+      <p id="adminLoading" class="text-white/40 text-sm text-center py-10">Loading team invoices…</p>
+      <p id="adminError" class="hidden text-red-400 text-sm text-center py-10"></p>
+    </section>
+
+  </main>
+
+  <!-- Line item row template -->
+  <template id="lineItemTemplate">
+    <div class="line-item aurix-card rounded-2xl p-5 relative">
+      <button type="button" class="removeLineItemBtn absolute top-4 right-4 text-white/30 hover:text-red-400 transition" title="Remove this line item">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Client</label>
+          <select class="clientSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">End Client</label>
+          <input list="endClientList" class="endClientInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" placeholder="e.g. Pranav" />
+          <datalist class="endClientDatalist"></datalist>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Work Type</label>
+          <select class="workTypeSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+        <div class="space-y-1.5 sm:col-span-1">
+          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Description</label>
+          <input type="text" class="descriptionInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" placeholder="Short description" />
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Month</label>
+          <select class="monthSelect aurix-input w-full rounded-xl px-3 py-2.5 text-sm"></select>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Qty</label>
+            <input type="number" min="0" step="1" value="1" class="quantityInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Rate</label>
+            <input type="number" min="0" step="0.01" value="0" class="rateInput aurix-input w-full rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-bold uppercase tracking-widest text-white/40">Amount</label>
+            <div class="amountDisplay aurix-input w-full rounded-xl px-3 py-2.5 text-sm bg-white/[0.02] text-white/70 font-semibold">$0.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/data.js"></script>
+  <script src="assets/auth.js"></script>
+  <script src="assets/api.js"></script>
+  <script src="assets/app.js"></script>
+  <script src="assets/submit.js"></script>
+  <script src="assets/my-invoices.js"></script>
+  <script src="assets/admin.js"></script>
+</body>
+</html>
