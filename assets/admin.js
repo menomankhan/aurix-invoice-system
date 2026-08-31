@@ -70,7 +70,10 @@
       return `<button class="generateSendBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Generate &amp; Send for Signature</button>`;
     }
     if (inv.status === "Sent") {
-      return `<span class="text-white/30 text-xs italic">Waiting for signature…</span>`;
+      return `
+        <span class="text-white/30 text-xs italic">Waiting for signature…</span>
+        <button class="generateSendBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Resend Email</button>
+      `;
     }
     if (inv.status === "Signed") {
       return `<button data-action="Paid" class="statusBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-green-500 hover:bg-green-500/10 transition">Mark Paid</button>`;
@@ -305,6 +308,7 @@
       btn.addEventListener("click", async () => {
         const card = btn.closest("[data-invoice-id]");
         const invoiceId = card.dataset.invoiceId;
+        const originalLabel = btn.textContent;
         btn.disabled = true;
         btn.textContent = "Sending…";
         try {
@@ -316,7 +320,7 @@
           errorEl.textContent = err.message || "Could not send that invoice for signature.";
           errorEl.classList.remove("hidden");
           btn.disabled = false;
-          btn.textContent = "Generate & Send for Signature";
+          btn.textContent = originalLabel;
         }
       });
     });

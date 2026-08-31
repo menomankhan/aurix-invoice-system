@@ -286,7 +286,12 @@ function handleGenerateAndSendInvoice(body) {
 
   const invoice = findRow(readRows("Invoices"), "id", invoiceId);
   if (!invoice) throw new Error("Invoice not found");
-  if (String(invoice.status) !== "Approved") throw new Error("Only an Approved invoice can be sent for signature");
+  // Approved -> first send. Sent -> this is a resend (e.g. the first email
+  // attempt failed after the status had already flipped, or they just want
+  // to re-send the link) — both are valid entry points.
+  if (invoice.status !== "Approved" && invoice.status !== "Sent") {
+    throw new Error("Only an Approved (or already-Sent) invoice can be sent for signature");
+  }
 
   const user = findRow(readRows("Users"), "username", invoice.username);
   if (!user || !user.email) throw new Error("This person has no email on file yet — add it in Manage Team first.");
@@ -294,22 +299,31 @@ function handleGenerateAndSendInvoice(body) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const signToken = Utilities.getUuid();
-    appendRow("Signatures", {
-      id: Utilities.getUuid(),
-      invoiceId: invoiceId,
-      username: invoice.username,
-      signToken: signToken,
-      status: "Pending",
-      sentAt: new Date().toISOString(),
-      signedAt: "",
-      pdfUrl: "",
+    // Reuse the existing pending sign link on a resend instead of minting a
+    // new one and orphaning whatever link might already be out there.
+    const existingPending = readRows("Signatures").find(function (r) {
+      return r.invoiceId === invoiceId && r.status === "Pending";
     });
-
-    updateFields("Invoices", "id", invoiceId, { status: "Sent", updatedAt: new Date().toISOString() });
+    const signToken = existingPending ? existingPending.signToken : Utilities.getUuid();
+    if (!existingPending) {
+      appendRow("Signatures", {
+        id: Utilities.getUuid(),
+        invoiceId: invoiceId,
+        username: invoice.username,
+        signToken: signToken,
+        status: "Pending",
+        sentAt: new Date().toISOString(),
+        signedAt: "",
+        pdfUrl: "",
+      });
+    }
 
     const signUrl = FRONTEND_BASE_URL + "/sign.html?token=" + encodeURIComponent(signToken);
     const monthLabel = formatMonthLabel(invoice.month);
+
+    // Send BEFORE flipping the status — if this throws, the invoice stays
+    // exactly where it was so the admin can just click the button again,
+    // instead of silently getting stuck saying "Sent" with nothing mailed.
     MailApp.sendEmail({
       to: user.email,
       subject: "Aurix — please review and sign your invoice for " + monthLabel,
@@ -321,6 +335,8 @@ function handleGenerateAndSendInvoice(body) {
         "<p>If anything looks wrong, contact Noman directly before signing — don't sign an invoice you haven't checked.</p>" +
         "<p>— Aurix Productions</p>",
     });
+
+    updateFields("Invoices", "id", invoiceId, { status: "Sent", updatedAt: new Date().toISOString() });
 
     return { success: true };
   } finally {
