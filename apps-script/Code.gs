@@ -327,13 +327,7 @@ function handleGenerateAndSendInvoice(body) {
     MailApp.sendEmail({
       to: user.email,
       subject: "Aurix — please review and sign your invoice for " + monthLabel,
-      htmlBody:
-        "<p>Hi " + escapeHtmlForEmail(user.fullName) + ",</p>" +
-        "<p>Your invoice for <strong>" + escapeHtmlForEmail(monthLabel) + "</strong> has been approved. " +
-        "Please review the line items and your bank details, then sign to confirm everything is correct:</p>" +
-        "<p><a href=\"" + signUrl + "\">Review &amp; sign your invoice</a></p>" +
-        "<p>If anything looks wrong, contact Noman directly before signing — don't sign an invoice you haven't checked.</p>" +
-        "<p>— Aurix Productions</p>",
+      htmlBody: buildSignEmailHtml(user.fullName, monthLabel, signUrl),
     });
 
     updateFields("Invoices", "id", invoiceId, { status: "Sent", updatedAt: new Date().toISOString() });
@@ -443,7 +437,7 @@ function generateSignedInvoicePdf(invoice, user, lineItems, signatureImageDataUr
     ]);
   });
   insertAtPlaceholder(docBody, "{{LINE_ITEMS_TABLE}}", function (index) {
-    docBody.insertTable(index, tableData);
+    styleLineItemsTable(docBody.insertTable(index, tableData));
   });
 
   const imageBytes = Utilities.base64Decode(String(signatureImageDataUrl).split(",").pop());
@@ -475,6 +469,31 @@ function insertAtPlaceholder(docBody, placeholder, insertFn) {
   parent.removeFromParent();
 }
 
+// Blue header row (matching the brand), light borders, right-aligned numbers
+// — this is the table that actually varies per invoice, so it's styled
+// here rather than in the static template.
+function styleLineItemsTable(table) {
+  const BLUE = "#0745E0";
+  const DARK = "#0D1B3E";
+  const numRows = table.getNumRows();
+  for (let r = 0; r < numRows; r++) {
+    const row = table.getRow(r);
+    const numCols = row.getNumCells();
+    for (let c = 0; c < numCols; c++) {
+      const cell = row.getCell(c);
+      const para = cell.getChild(0).asParagraph();
+      if (r === 0) {
+        cell.setBackgroundColor(BLUE);
+        para.setBold(true).setForegroundColor("#FFFFFF").setFontSize(9);
+      } else {
+        para.setFontSize(9).setForegroundColor(DARK);
+        if (c >= 4) para.setAlignment(DocumentApp.HorizontalAlignment.RIGHT); // Qty / Rate / Amount
+      }
+    }
+  }
+  table.setBorderColor("#D1D5DB");
+}
+
 function getOrCreateSignedInvoicesFolder() {
   const existing = DriveApp.getFoldersByName(SIGNED_INVOICES_FOLDER_NAME);
   if (existing.hasNext()) return existing.next();
@@ -489,6 +508,30 @@ function formatMonthLabel(monthValue) {
 
 function escapeHtmlForEmail(str) {
   return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Inline-styled (no <style> block — many email clients strip those) so it
+// renders consistently across Gmail and most modern mail apps.
+function buildSignEmailHtml(fullName, monthLabel, signUrl) {
+  const name = escapeHtmlForEmail(fullName);
+  const month = escapeHtmlForEmail(monthLabel);
+  return (
+    '<div style="background:#04153B;padding:40px 24px;font-family:Arial,Helvetica,sans-serif;">' +
+      '<div style="max-width:480px;margin:0 auto;background:#0D1B3E;border-radius:16px;padding:40px 32px;text-align:center;">' +
+        '<img src="' + FRONTEND_BASE_URL + '/assets/logo-mark.png" width="48" height="48" alt="Aurix" style="border-radius:12px;margin:0 auto 20px;display:block;" />' +
+        '<h1 style="color:#ffffff;font-size:22px;margin:0 0 16px;">Invoice Ready to Sign</h1>' +
+        '<p style="color:#94a3b8;font-size:15px;line-height:1.6;margin:0 0 8px;">Dear ' + name + ",</p>" +
+        '<p style="color:#94a3b8;font-size:15px;line-height:1.6;margin:0 0 28px;">' +
+          'Your invoice for <strong style="color:#ffffff;">' + month + "</strong> has been approved. " +
+          "Please review the line items and your bank details, then sign to confirm everything is correct." +
+        "</p>" +
+        '<a href="' + signUrl + '" style="display:inline-block;background:#ffffff;color:#0D1B3E;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:999px;text-decoration:none;">Review &amp; Sign Invoice</a>' +
+        '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.12);margin:32px 0;" />' +
+        '<p style="color:#64748b;font-size:13px;margin:0;">If anything looks wrong, contact Noman directly before signing — don\'t sign an invoice you haven\'t checked.</p>' +
+        '<p style="color:#64748b;font-size:13px;margin:16px 0 0;">Warmly,<br/><strong style="color:#94a3b8;">Aurix Productions</strong></p>' +
+      "</div>" +
+    "</div>"
+  );
 }
 
 // Run this ONCE from the Apps Script editor (select "authorizeMailScope"
@@ -530,40 +573,115 @@ function authorizeDriveScope() {
 function setupInvoiceTemplate() {
   const doc = DocumentApp.create("Aurix Invoice Template");
   const body = doc.getBody();
-  body.setMarginTop(40).setMarginBottom(40).setMarginLeft(50).setMarginRight(50);
+  body.setMarginTop(40).setMarginBottom(40).setMarginLeft(46).setMarginRight(46);
 
-  const brandBlue = "#0745E0";
-  const darkText = "#0D1B3E";
+  const BLUE = "#0745E0";
+  const DARK = "#0D1B3E";
+  const GRAY = "#6B7280";
+  const BORDER = "#D1D5DB";
+  const LIGHT_BG = "#F1F5F9";
 
-  body.appendParagraph("AURIX PRODUCTIONS").setFontSize(20).setBold(true).setForegroundColor(darkText);
-  body.appendParagraph("Creating Systems that Sustain").setFontSize(9).setForegroundColor("#888888");
-  body.appendParagraph("");
-  body.appendParagraph("INVOICE").setFontSize(16).setBold(true).setForegroundColor(brandBlue);
-  body.appendParagraph("Invoice ID: {{invoiceId}}").setFontSize(10);
-  body.appendParagraph("Period: {{month}}").setFontSize(10);
-  body.appendParagraph("Generated: {{dateGenerated}}").setFontSize(10);
-  body.appendParagraph("");
-  body.appendParagraph("Team Member: {{fullName}}").setFontSize(12).setBold(true);
-  body.appendParagraph("");
-  body.appendParagraph("{{LINE_ITEMS_TABLE}}").setFontSize(10);
-  body.appendParagraph("");
-  body.appendParagraph("Total Due: {{total}}").setFontSize(13).setBold(true).setForegroundColor(brandBlue);
-  body.appendParagraph("");
-  body.appendParagraph("Payment Details").setFontSize(12).setBold(true);
-  body.appendParagraph("Bank Name: {{bankName}}").setFontSize(10);
-  body.appendParagraph("Account Title: {{bankAccountTitle}}").setFontSize(10);
-  body.appendParagraph("Account Number: {{bankAccountNumber}}").setFontSize(10);
-  body.appendParagraph("");
-  body.appendParagraph("By signing below, I confirm the amounts and payment details above are correct.").setFontSize(9).setItalic(true);
-  body.appendParagraph("");
-  body.appendParagraph("Signature:").setFontSize(10).setBold(true);
+  body.getParagraphs()[0].setText(""); // the blank paragraph every new Doc starts with
+
+  // ---------- Header: logo + brand (left) | INVOICE + meta table (right) ----------
+  const headerTable = body.appendTable([["", ""]]);
+  headerTable.setBorderWidth(0);
+  const brandCell = headerTable.getRow(0).getCell(0);
+  const invoiceCell = headerTable.getRow(0).getCell(1);
+  brandCell.setWidth(300);
+  invoiceCell.setWidth(190);
+
+  // Logo is best-effort — if the fetch ever fails, the invoice still looks
+  // fine without it rather than breaking generation entirely.
+  try {
+    const logoBlob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark.png").getBlob();
+    brandCell.getChild(0).asParagraph().appendInlineImage(logoBlob).setWidth(28).setHeight(28);
+  } catch (e) {
+    // no logo — not fatal
+  }
+  brandCell.appendParagraph("AURIX PRODUCTIONS").setFontSize(13).setBold(true).setForegroundColor(DARK);
+  brandCell.appendParagraph("Creating Systems that Sustain").setFontSize(8).setForegroundColor(GRAY);
+
+  const titlePara = invoiceCell.getChild(0).asParagraph();
+  titlePara.setText("INVOICE");
+  titlePara.setFontSize(26).setBold(true).setForegroundColor(BLUE).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+  invoiceCell.appendParagraph("");
+  const metaTable = invoiceCell.appendTable([
+    ["Invoice ID", "{{invoiceId}}"],
+    ["Period", "{{month}}"],
+    ["Generated", "{{dateGenerated}}"],
+  ]);
+  metaTable.setBorderColor(BORDER);
+  for (let r = 0; r < metaTable.getNumRows(); r++) {
+    const row = metaTable.getRow(r);
+    row.getCell(0).getChild(0).asParagraph().setFontSize(8).setBold(true).setForegroundColor(GRAY);
+    row.getCell(1).getChild(0).asParagraph().setFontSize(8).setForegroundColor(DARK);
+  }
+
+  body.appendParagraph("").setFontSize(6);
+
+  // ---------- Team Member (left) | Payment Details (right) ----------
+  const infoTable = body.appendTable([["", ""]]);
+  infoTable.setBorderWidth(0);
+  const memberCell = infoTable.getRow(0).getCell(0);
+  const bankCell = infoTable.getRow(0).getCell(1);
+  memberCell.setWidth(235);
+  bankCell.setWidth(235);
+
+  addSectionBar(memberCell, "TEAM MEMBER", BLUE);
+  memberCell.appendParagraph("{{fullName}}").setFontSize(11).setBold(true).setForegroundColor(DARK);
+
+  addSectionBar(bankCell, "PAYMENT DETAILS", BLUE);
+  bankCell.appendParagraph("Bank: {{bankName}}").setFontSize(9).setForegroundColor(DARK);
+  bankCell.appendParagraph("Account Title: {{bankAccountTitle}}").setFontSize(9).setForegroundColor(DARK);
+  bankCell.appendParagraph("Account Number: {{bankAccountNumber}}").setFontSize(9).setForegroundColor(DARK);
+
+  body.appendParagraph("").setFontSize(6);
+
+  // ---------- Line items — replaced with a real, styled table at signing time ----------
+  body.appendParagraph("{{LINE_ITEMS_TABLE}}").setFontSize(9).setForegroundColor(GRAY);
+
+  body.appendParagraph("").setFontSize(6);
+
+  // ---------- Total ----------
+  const totalTable = body.appendTable([["TOTAL DUE", "{{total}}"]]);
+  totalTable.setBorderWidth(0);
+  const totalRow = totalTable.getRow(0);
+  totalRow.getCell(0).setBackgroundColor(LIGHT_BG);
+  totalRow.getCell(1).setBackgroundColor(LIGHT_BG);
+  totalRow.getCell(0).getChild(0).asParagraph().setBold(true).setFontSize(11).setForegroundColor(DARK);
+  totalRow.getCell(1).getChild(0).asParagraph().setBold(true).setFontSize(14).setForegroundColor(BLUE).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+
+  body.appendParagraph("").setFontSize(14);
+
+  // ---------- Signature ----------
+  body.appendParagraph("By signing below, I confirm the amounts and payment details above are correct.").setFontSize(9).setItalic(true).setForegroundColor(GRAY);
+  body.appendParagraph("").setFontSize(6);
+  body.appendParagraph("Signature:").setFontSize(10).setBold(true).setForegroundColor(DARK);
   body.appendParagraph("{{SIGNATURE}}").setFontSize(10);
-  body.appendParagraph("Signed on: {{dateGenerated}}").setFontSize(9).setForegroundColor("#888888");
+  body.appendParagraph("Signed on: {{dateGenerated}}").setFontSize(9).setForegroundColor(GRAY);
+
+  // ---------- Footer ----------
+  body.appendParagraph("").setFontSize(10);
+  body.appendHorizontalRule();
+  body.appendParagraph("Thank you for your business.").setFontSize(9).setForegroundColor(GRAY).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  body.appendParagraph("— Aurix Productions").setFontSize(9).setBold(true).setForegroundColor(DARK).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
   doc.saveAndClose();
   Logger.log("Template created. Document ID: " + doc.getId());
   Logger.log("Copy this ID into INVOICE_TEMPLATE_DOC_ID at the top of Code.gs, then redeploy.");
   return doc.getId();
+}
+
+// A colored "section bar" — Docs paragraphs can't have a background color
+// directly, so this simulates one with a borderless 1x1 table cell instead.
+function addSectionBar(cell, label, color) {
+  const barTable = cell.appendTable([[label]]);
+  barTable.setBorderWidth(0);
+  const barCell = barTable.getRow(0).getCell(0);
+  barCell.setBackgroundColor(color);
+  barCell.setPaddingTop(4).setPaddingBottom(4).setPaddingLeft(8).setPaddingRight(8);
+  barCell.getChild(0).asParagraph().setFontSize(9).setBold(true).setForegroundColor("#FFFFFF");
 }
 
 // Unlocks exactly one more submission for a person+month that's already
