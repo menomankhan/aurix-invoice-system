@@ -68,5 +68,20 @@ window.AurixApi = (function () {
     deleteClientRow(id) {
       return call("deleteClientRow", { id });
     },
+    getWorkTypes() {
+      return call("getWorkTypes", {});
+    },
+    addWorkType(workType) {
+      return call("addWorkType", { workType });
+    },
+    deleteWorkType(id) {
+      return call("deleteWorkType", { id });
+    },
+    assignClientWorkType(client, workType) {
+      return call("assignClientWorkType", { client, workType });
+    },
+    unassignClientWorkType(client, workType) {
+      return call("unassignClientWorkType", { client, workType });
+    },
   };
 })();

@@ -135,6 +135,35 @@
         </div>
       </div>
 
+      <div class="aurix-card rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold">Manage Work Types</h2>
+          <button id="toggleManageWorkTypes" type="button" class="text-xs font-bold text-white/50 hover:text-white transition">Show</button>
+        </div>
+        <div id="manageWorkTypesBody" class="hidden space-y-6">
+          <div class="space-y-3">
+            <p class="text-white/40 text-xs uppercase tracking-widest font-bold">All Work Types</p>
+            <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+              <input id="newWorkTypeName" type="text" class="aurix-input rounded-xl px-3 py-2.5 text-sm" placeholder="e.g. Voiceover" />
+              <button id="addWorkTypeBtn" type="button" class="aurix-btn-primary rounded-xl px-5 py-2.5 text-sm font-bold whitespace-nowrap">Add</button>
+            </div>
+            <div id="workTypesList" class="flex flex-wrap gap-2"></div>
+            <p id="workTypesEmpty" class="hidden text-white/30 text-xs">No work types yet — add your first one above.</p>
+          </div>
+
+          <div class="space-y-3">
+            <p class="text-white/40 text-xs uppercase tracking-widest font-bold">Assign Work Types to a Client</p>
+            <p class="text-white/40 text-xs">A client with nothing checked shows the full list above by default. Check specific ones to narrow it down for that client only.</p>
+            <select id="workTypeClientSelect" class="aurix-input rounded-xl px-3 py-2.5 text-sm">
+              <option value="">Select a client…</option>
+            </select>
+            <div id="workTypeAssignments" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+          </div>
+
+          <p id="manageWorkTypesError" class="hidden text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></p>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <select id="filterPerson" class="aurix-input rounded-xl px-3 py-2.5 text-sm sm:col-span-1">
           <option value="">All People</option>
@@ -222,6 +251,7 @@
   <script src="assets/auth.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/clients-store.js"></script>
+  <script src="assets/work-types-store.js"></script>
   <script src="assets/app.js"></script>
   <script src="assets/submit.js"></script>
   <script src="assets/my-invoices.js"></script>

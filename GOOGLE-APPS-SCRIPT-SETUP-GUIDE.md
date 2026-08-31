@@ -125,13 +125,18 @@ The Web App URL stays the same — you don't need to update `config.js` again af
 
 ---
 
-## Update: Manage Clients from the Admin view
+## Update: Manage Clients and Work Types from the Admin view
 
-Clients used to be hardcoded in `assets/data.js` (needed a code change every time). They now live in the Sheet, with an Admin UI to add/remove them — no code changes ever needed for a new client. If your system is already deployed, apply this update:
+Clients and work types used to be hardcoded in `assets/data.js` (needed a code change every time). They now both live in the Sheet, with Admin UI to manage them — no code changes ever needed for a new client or work type. Apply this before (or instead of) your first deployment:
 
-1. **Add a `Clients` tab to your Google Sheet**: same pattern as before — **File → Import → Upload** → `sheet-templates/Clients.csv` → **Insert new sheet**. It comes pre-filled with your existing 5 clients and Kratos's 3 end-clients, so nothing is lost.
-2. **Update the backend**: open **Extensions → Apps Script**, select all the existing code, delete it, and paste in the current [apps-script/Code.gs](apps-script/Code.gs) (your `JWT_SECRET` line needs the real value again, same as the first time — copy it from `credentials-DO-NOT-COMMIT.txt`).
+1. **Add three tabs to your Google Sheet** (same pattern as before — **File → Import → Upload** → pick the file → **Insert new sheet** — repeat for each):
+   - `sheet-templates/Clients.csv` — pre-filled with your existing 5 clients and Kratos's 3 end-clients.
+   - `sheet-templates/WorkTypes.csv` — pre-filled with your existing 10 work types.
+   - `sheet-templates/ClientWorkTypes.csv` — empty on purpose. Until you assign specific work types to a client, that client shows the full work type list by default, so nothing is blocked while you set this up gradually.
+2. **Update the backend**: open **Extensions → Apps Script**, select all the existing code, delete it, and paste in the current [apps-script/Code.gs](apps-script/Code.gs) (your `JWT_SECRET` line needs the real value again — copy it from `credentials-DO-NOT-COMMIT.txt`).
 3. **Deploy → Manage deployments** → pencil icon → **Version: New version** → **Deploy**.
-4. Nothing else — the frontend already has the new "Manage Clients" panel (collapsed by default, on the Admin page — click **Show**).
+4. Nothing else — the frontend already has both new Admin panels (collapsed by default — click **Show** on each).
 
-To use it: as Noman, go to **Admin → Manage Clients → Show**, type a client name (and optionally an end-client under it), click **Add**. It appears in everyone's Submit form immediately, no page reload needed for people who open Submit fresh. **Remove** deletes a single row — removing a client's "bare" row doesn't remove its end-clients, and vice versa, so if you want a client fully gone, remove each of its rows.
+**Manage Clients**: type a client name (and optionally an end-client under it), click **Add**. **Remove** deletes a single row — a client's "bare" row and its end-client rows are independent, so remove each one if you want a client fully gone.
+
+**Manage Work Types**: the top section is your master list — add a new work type once, and it becomes available everywhere. The bottom section is per-client: pick a client from the dropdown, then check the exact work types that client actually does. A client with nothing checked keeps showing the full master list (the safe default) — checking anything switches that client to only those checked items, on the Submit form's Work Type dropdown, immediately.

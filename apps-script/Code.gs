@@ -29,6 +29,11 @@ function doPost(e) {
       case "getClients": result = handleGetClients(body); break;
       case "addClient": result = handleAddClient(body); break;
       case "deleteClientRow": result = handleDeleteClientRow(body); break;
+      case "getWorkTypes": result = handleGetWorkTypes(body); break;
+      case "addWorkType": result = handleAddWorkType(body); break;
+      case "deleteWorkType": result = handleDeleteWorkType(body); break;
+      case "assignClientWorkType": result = handleAssignClientWorkType(body); break;
+      case "unassignClientWorkType": result = handleUnassignClientWorkType(body); break;
       default: throw new Error("Unknown action");
     }
     return jsonResponse(result);
@@ -226,6 +231,99 @@ function handleDeleteClientRow(body) {
     }
   }
   throw new Error("Not found");
+}
+
+// WorkTypes tab: the master list of every work type across the business.
+// ClientWorkTypes tab: (client, workType) pairs — which of those apply to
+// a given client. A client with zero pairs falls back to the full master
+// list (so nothing is ever blocked just because it hasn't been customized
+// yet), matching how End Client suggestions degrade to free text.
+
+function handleGetWorkTypes(body) {
+  requireAuth(body);
+  const masterRows = readRows("WorkTypes").filter(function (r) { return r.workType; });
+  const master = masterRows.map(function (r) { return r.workType; });
+
+  const byClient = {};
+  readRows("ClientWorkTypes").forEach(function (r) {
+    if (!r.client || !r.workType) return;
+    if (master.indexOf(r.workType) === -1) return; // ignore pairs left over from a deleted work type
+    if (!byClient[r.client]) byClient[r.client] = [];
+    byClient[r.client].push(r.workType);
+  });
+
+  // `rows` carries the real per-row id so the Admin panel can delete an
+  // exact master work type; `workTypes`/`byClient` stay as plain strings
+  // for the Submit form.
+  return {
+    workTypes: master,
+    byClient: byClient,
+    rows: masterRows.map(function (r) { return { id: r.id, workType: r.workType }; }),
+  };
+}
+
+function handleAddWorkType(body) {
+  requireAdmin(body);
+  const workType = String(body.workType || "").trim();
+  if (!workType) throw new Error("Work type name is required");
+
+  const exists = readRows("WorkTypes").some(function (r) { return r.workType === workType; });
+  if (exists) throw new Error("That work type already exists");
+
+  appendRow("WorkTypes", { id: Utilities.getUuid(), workType: workType });
+  return { success: true };
+}
+
+function handleDeleteWorkType(body) {
+  requireAdmin(body);
+  const id = body.id;
+  if (!id) throw new Error("Missing id");
+
+  const sheet = getSheet("WorkTypes");
+  const headers = getHeaders(sheet);
+  const idIdx = headers.indexOf("id");
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  throw new Error("Not found");
+}
+
+function handleAssignClientWorkType(body) {
+  requireAdmin(body);
+  const client = String(body.client || "").trim();
+  const workType = String(body.workType || "").trim();
+  if (!client || !workType) throw new Error("Client and work type are required");
+
+  const already = readRows("ClientWorkTypes").some(function (r) { return r.client === client && r.workType === workType; });
+  if (already) return { success: true };
+
+  appendRow("ClientWorkTypes", { id: Utilities.getUuid(), client: client, workType: workType });
+  return { success: true };
+}
+
+function handleUnassignClientWorkType(body) {
+  requireAdmin(body);
+  const client = String(body.client || "").trim();
+  const workType = String(body.workType || "").trim();
+
+  const sheet = getSheet("ClientWorkTypes");
+  const headers = getHeaders(sheet);
+  const clientIdx = headers.indexOf("client");
+  const workTypeIdx = headers.indexOf("workType");
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][clientIdx]) === client && String(data[i][workTypeIdx]) === workType) {
+      sheet.deleteRow(i + 1);
+      break;
+    }
+  }
+  return { success: true }; // idempotent either way — "not assigned" is a fine end state
 }
 
 // ============================== Shared helpers ==============================

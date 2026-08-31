@@ -1,23 +1,10 @@
 /*
   Static dropdown data for the submission form.
-  Clients/end-clients are NOT here anymore — the admin manages those from
-  the Admin view, stored in the Clients sheet (see assets/clients-store.js).
-  Work types are still a fixed list; edit here if that ever needs to change.
+  Clients/end-clients and work types are NOT here anymore — the admin
+  manages both from the Admin view (see assets/clients-store.js and
+  assets/work-types-store.js).
 */
 window.AURIX_DATA = {
-  WORK_TYPES: [
-    "Clipping — English",
-    "Clipping + Captions — Arabic",
-    "Thumbnail",
-    "Editing",
-    "Hook",
-    "Bridge",
-    "Body",
-    "Long-Form",
-    "Fixed Monthly Pay",
-    "Other",
-  ],
-
   STATUSES: ["Submitted", "Approved", "Paid"],
 };
 

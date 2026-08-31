@@ -11,7 +11,7 @@
   const errorEl = document.getElementById("submitError");
   const successEl = document.getElementById("submitSuccess");
 
-  const { WORK_TYPES, monthOptions, currentMonthValue } = window.AURIX_DATA;
+  const { monthOptions, currentMonthValue } = window.AURIX_DATA;
 
   function currency(n) {
     return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -48,6 +48,13 @@
       errorEl.classList.remove("hidden");
     }
 
+    try {
+      await window.AurixWorkTypesStore.load();
+    } catch (err) {
+      errorEl.textContent = "Could not load the work type list — you can still fill in everything else.";
+      errorEl.classList.remove("hidden");
+    }
+
     const node = template.content.firstElementChild.cloneNode(true);
 
     const clientSelect = node.querySelector(".clientSelect");
@@ -61,7 +68,6 @@
     const removeBtn = node.querySelector(".removeLineItemBtn");
 
     fillSelect(clientSelect, clients, "Select a client…");
-    fillSelect(workTypeSelect, WORK_TYPES, "Select work type…");
     fillSelect(monthSelect, monthOptions(12));
     monthSelect.value = currentMonthValue();
 
@@ -79,8 +85,20 @@
         endClientDatalist.appendChild(opt);
       });
     }
-    clientSelect.addEventListener("change", refreshEndClientSuggestions);
+
+    function refreshWorkTypeOptions() {
+      const previousValue = workTypeSelect.value;
+      const options = window.AurixWorkTypesStore.forClient(clientSelect.value);
+      fillSelect(workTypeSelect, options, "Select work type…");
+      workTypeSelect.value = options.includes(previousValue) ? previousValue : "";
+    }
+
+    clientSelect.addEventListener("change", () => {
+      refreshEndClientSuggestions();
+      refreshWorkTypeOptions();
+    });
     refreshEndClientSuggestions();
+    refreshWorkTypeOptions();
 
     function recalcAmount() {
       const qty = Number(quantityInput.value) || 0;

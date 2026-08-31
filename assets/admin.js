@@ -22,6 +22,16 @@
   const clientsTableEl = document.getElementById("clientsTable");
   const clientsEmptyEl = document.getElementById("clientsEmpty");
 
+  const toggleManageWorkTypesBtn = document.getElementById("toggleManageWorkTypes");
+  const manageWorkTypesBody = document.getElementById("manageWorkTypesBody");
+  const newWorkTypeNameInput = document.getElementById("newWorkTypeName");
+  const addWorkTypeBtn = document.getElementById("addWorkTypeBtn");
+  const manageWorkTypesErrorEl = document.getElementById("manageWorkTypesError");
+  const workTypesListEl = document.getElementById("workTypesList");
+  const workTypesEmptyEl = document.getElementById("workTypesEmpty");
+  const workTypeClientSelect = document.getElementById("workTypeClientSelect");
+  const workTypeAssignmentsEl = document.getElementById("workTypeAssignments");
+
   const { formatMonth } = window.AURIX_DATA;
 
   let allInvoices = [];
@@ -239,6 +249,131 @@
       manageClientsErrorEl.classList.remove("hidden");
     } finally {
       addClientBtn.disabled = false;
+    }
+  });
+
+  // ============================== Manage Work Types ==============================
+
+  function renderWorkTypesList(rows) {
+    if (rows.length === 0) {
+      workTypesListEl.innerHTML = "";
+      workTypesEmptyEl.classList.remove("hidden");
+      return;
+    }
+    workTypesEmptyEl.classList.add("hidden");
+
+    const sorted = [...rows].sort((a, b) => a.workType.localeCompare(b.workType));
+    workTypesListEl.innerHTML = sorted.map((row) => `
+      <span class="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold" data-row-id="${escapeHtml(row.id)}">
+        ${escapeHtml(row.workType)}
+        <button class="deleteWorkTypeBtn text-white/30 hover:text-red-400 transition leading-none text-sm" title="Remove">&times;</button>
+      </span>
+    `).join("");
+
+    workTypesListEl.querySelectorAll(".deleteWorkTypeBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const chip = btn.closest("[data-row-id]");
+        const id = chip.dataset.rowId;
+        btn.disabled = true;
+        try {
+          await window.AurixApi.deleteWorkType(id);
+          await loadWorkTypesPanel(true);
+        } catch (err) {
+          manageWorkTypesErrorEl.textContent = err.message || "Could not remove that work type.";
+          manageWorkTypesErrorEl.classList.remove("hidden");
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  function renderWorkTypeClientOptions(clients) {
+    const previousValue = workTypeClientSelect.value;
+    workTypeClientSelect.innerHTML = `<option value="">Select a client…</option>` +
+      [...clients].sort().map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    workTypeClientSelect.value = clients.includes(previousValue) ? previousValue : "";
+  }
+
+  function renderWorkTypeAssignments() {
+    const client = workTypeClientSelect.value;
+    if (!client) {
+      workTypeAssignmentsEl.innerHTML = `<p class="text-white/30 text-xs sm:col-span-2">Pick a client above to customize its work types.</p>`;
+      return;
+    }
+
+    const { workTypes, byClient } = window.AurixWorkTypesStore.get();
+    const assigned = new Set(byClient[client] || []);
+
+    if (workTypes.length === 0) {
+      workTypeAssignmentsEl.innerHTML = `<p class="text-white/30 text-xs sm:col-span-2">Add a work type above first.</p>`;
+      return;
+    }
+
+    workTypeAssignmentsEl.innerHTML = workTypes.map((wt) => `
+      <label class="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-white/[0.02] cursor-pointer">
+        <input type="checkbox" class="workTypeCheckbox" value="${escapeHtml(wt)}" ${assigned.has(wt) ? "checked" : ""} />
+        ${escapeHtml(wt)}
+      </label>
+    `).join("");
+
+    workTypeAssignmentsEl.querySelectorAll(".workTypeCheckbox").forEach((box) => {
+      box.addEventListener("change", async () => {
+        box.disabled = true;
+        try {
+          if (box.checked) {
+            await window.AurixApi.assignClientWorkType(client, box.value);
+          } else {
+            await window.AurixApi.unassignClientWorkType(client, box.value);
+          }
+          await window.AurixWorkTypesStore.load(true);
+        } catch (err) {
+          box.checked = !box.checked; // revert the visual toggle since the change didn't stick
+          manageWorkTypesErrorEl.textContent = err.message || "Could not update that assignment.";
+          manageWorkTypesErrorEl.classList.remove("hidden");
+        } finally {
+          box.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function loadWorkTypesPanel(force) {
+    const [clientsData, workTypesData] = await Promise.all([
+      window.AurixClientsStore.load(force),
+      window.AurixWorkTypesStore.load(force),
+    ]);
+    renderWorkTypeClientOptions(clientsData.clients);
+    renderWorkTypesList(workTypesData.rows);
+    renderWorkTypeAssignments();
+  }
+
+  toggleManageWorkTypesBtn.addEventListener("click", () => {
+    const isHidden = manageWorkTypesBody.classList.contains("hidden");
+    manageWorkTypesBody.classList.toggle("hidden");
+    toggleManageWorkTypesBtn.textContent = isHidden ? "Hide" : "Show";
+    if (isHidden) loadWorkTypesPanel();
+  });
+
+  workTypeClientSelect.addEventListener("change", renderWorkTypeAssignments);
+
+  addWorkTypeBtn.addEventListener("click", async () => {
+    manageWorkTypesErrorEl.classList.add("hidden");
+    const workType = newWorkTypeNameInput.value.trim();
+    if (!workType) {
+      manageWorkTypesErrorEl.textContent = "Enter a work type name first.";
+      manageWorkTypesErrorEl.classList.remove("hidden");
+      return;
+    }
+    addWorkTypeBtn.disabled = true;
+    try {
+      await window.AurixApi.addWorkType(workType);
+      newWorkTypeNameInput.value = "";
+      await loadWorkTypesPanel(true);
+    } catch (err) {
+      manageWorkTypesErrorEl.textContent = err.message || "Could not add that work type.";
+      manageWorkTypesErrorEl.classList.remove("hidden");
+    } finally {
+      addWorkTypeBtn.disabled = false;
     }
   });
 
