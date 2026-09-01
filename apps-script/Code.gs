@@ -473,8 +473,8 @@ function insertAtPlaceholder(docBody, placeholder, insertFn) {
 // — this is the table that actually varies per invoice, so it's styled
 // here rather than in the static template.
 function styleLineItemsTable(table) {
-  const BLUE = "#0745E0";
-  const DARK = "#0D1B3E";
+  const ACCENT = "#0D1B3E"; // dark navy, matches the rest of the template
+  const TEXT = "#000000";
   const numRows = table.getNumRows();
   for (let r = 0; r < numRows; r++) {
     const row = table.getRow(r);
@@ -483,10 +483,10 @@ function styleLineItemsTable(table) {
       const cell = row.getCell(c);
       const para = cell.getChild(0).asParagraph();
       if (r === 0) {
-        cell.setBackgroundColor(BLUE);
+        cell.setBackgroundColor(ACCENT);
         para.setBold(true).setForegroundColor("#FFFFFF").setFontSize(9);
       } else {
-        para.setFontSize(9).setForegroundColor(DARK);
+        para.setFontSize(9).setForegroundColor(TEXT);
         if (c >= 4) para.setAlignment(DocumentApp.HorizontalAlignment.RIGHT); // Qty / Rate / Amount
       }
     }
@@ -575,15 +575,17 @@ function setupInvoiceTemplate() {
   const body = doc.getBody();
   body.setMarginTop(40).setMarginBottom(40).setMarginLeft(46).setMarginRight(46);
 
-  const BLUE = "#0745E0";
-  const DARK = "#0D1B3E";
-  const GRAY = "#6B7280";
+  // A dark navy accent (matching the rest of the Aurix brand) for bars/title/
+  // total — deliberately muted, not the vibrant blue used elsewhere in the
+  // app. Every other piece of text is plain black, per instruction.
+  const ACCENT = "#0D1B3E";
+  const TEXT = "#000000";
   const BORDER = "#D1D5DB";
   const LIGHT_BG = "#F1F5F9";
 
   // (A new Doc already starts with one blank paragraph — nothing needed to clear it.)
 
-  // ---------- Header: logo + brand (left) | INVOICE + meta table (right) ----------
+  // ---------- Header: logo + "Aurix" (left) | INVOICE + meta table (right) ----------
   const headerTable = body.appendTable([["", ""]]);
   headerTable.setBorderWidth(0);
   const brandCell = headerTable.getRow(0).getCell(0);
@@ -593,18 +595,19 @@ function setupInvoiceTemplate() {
 
   // Logo is best-effort — if the fetch ever fails, the invoice still looks
   // fine without it rather than breaking generation entirely.
+  const brandPara = brandCell.getChild(0).asParagraph();
   try {
     const logoBlob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark.png").getBlob();
-    brandCell.getChild(0).asParagraph().appendInlineImage(logoBlob).setWidth(28).setHeight(28);
+    brandPara.appendInlineImage(logoBlob).setWidth(24).setHeight(24);
+    brandPara.appendText(" ");
   } catch (e) {
     // no logo — not fatal
   }
-  brandCell.appendParagraph("AURIX PRODUCTIONS").setFontSize(13).setBold(true).setForegroundColor(DARK);
-  brandCell.appendParagraph("Creating Systems that Sustain").setFontSize(8).setForegroundColor(GRAY);
+  brandPara.appendText("Aurix").setFontSize(16).setBold(true).setForegroundColor(TEXT);
 
   const titlePara = invoiceCell.getChild(0).asParagraph();
   titlePara.setText("INVOICE");
-  titlePara.setFontSize(26).setBold(true).setForegroundColor(BLUE).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+  titlePara.setFontSize(26).setBold(true).setForegroundColor(ACCENT).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
   invoiceCell.appendParagraph("");
   const metaTable = invoiceCell.appendTable([
     ["Invoice ID", "{{invoiceId}}"],
@@ -614,11 +617,11 @@ function setupInvoiceTemplate() {
   metaTable.setBorderColor(BORDER);
   for (let r = 0; r < metaTable.getNumRows(); r++) {
     const row = metaTable.getRow(r);
-    row.getCell(0).getChild(0).asParagraph().setFontSize(8).setBold(true).setForegroundColor(GRAY);
-    row.getCell(1).getChild(0).asParagraph().setFontSize(8).setForegroundColor(DARK);
+    row.getCell(0).getChild(0).asParagraph().setFontSize(8).setBold(true).setForegroundColor(TEXT);
+    row.getCell(1).getChild(0).asParagraph().setFontSize(8).setForegroundColor(TEXT);
   }
 
-  body.appendParagraph("").setFontSize(6);
+  body.appendParagraph("").setFontSize(10);
 
   // ---------- Team Member (left) | Payment Details (right) ----------
   const infoTable = body.appendTable([["", ""]]);
@@ -628,20 +631,20 @@ function setupInvoiceTemplate() {
   memberCell.setWidth(235);
   bankCell.setWidth(235);
 
-  addSectionBar(memberCell, "TEAM MEMBER", BLUE);
-  memberCell.appendParagraph("{{fullName}}").setFontSize(11).setBold(true).setForegroundColor(DARK);
+  addSectionBar(memberCell, "TEAM MEMBER", ACCENT);
+  memberCell.appendParagraph("{{fullName}}").setFontSize(11).setBold(true).setForegroundColor(TEXT);
 
-  addSectionBar(bankCell, "PAYMENT DETAILS", BLUE);
-  bankCell.appendParagraph("Bank: {{bankName}}").setFontSize(9).setForegroundColor(DARK);
-  bankCell.appendParagraph("Account Title: {{bankAccountTitle}}").setFontSize(9).setForegroundColor(DARK);
-  bankCell.appendParagraph("Account Number: {{bankAccountNumber}}").setFontSize(9).setForegroundColor(DARK);
+  addSectionBar(bankCell, "PAYMENT DETAILS", ACCENT);
+  bankCell.appendParagraph("Bank: {{bankName}}").setFontSize(9).setForegroundColor(TEXT);
+  bankCell.appendParagraph("Account Title: {{bankAccountTitle}}").setFontSize(9).setForegroundColor(TEXT);
+  bankCell.appendParagraph("Account Number: {{bankAccountNumber}}").setFontSize(9).setForegroundColor(TEXT);
 
-  body.appendParagraph("").setFontSize(6);
+  body.appendParagraph("").setFontSize(10);
 
   // ---------- Line items — replaced with a real, styled table at signing time ----------
-  body.appendParagraph("{{LINE_ITEMS_TABLE}}").setFontSize(9).setForegroundColor(GRAY);
+  body.appendParagraph("{{LINE_ITEMS_TABLE}}").setFontSize(9).setForegroundColor(TEXT);
 
-  body.appendParagraph("").setFontSize(6);
+  body.appendParagraph("").setFontSize(10);
 
   // ---------- Total ----------
   const totalTable = body.appendTable([["TOTAL DUE", "{{total}}"]]);
@@ -649,23 +652,29 @@ function setupInvoiceTemplate() {
   const totalRow = totalTable.getRow(0);
   totalRow.getCell(0).setBackgroundColor(LIGHT_BG);
   totalRow.getCell(1).setBackgroundColor(LIGHT_BG);
-  totalRow.getCell(0).getChild(0).asParagraph().setBold(true).setFontSize(11).setForegroundColor(DARK);
-  totalRow.getCell(1).getChild(0).asParagraph().setBold(true).setFontSize(14).setForegroundColor(BLUE).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+  totalRow.getCell(0).getChild(0).asParagraph().setBold(true).setFontSize(11).setForegroundColor(TEXT);
+  totalRow.getCell(1).getChild(0).asParagraph().setBold(true).setFontSize(14).setForegroundColor(ACCENT).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
 
-  body.appendParagraph("").setFontSize(14);
+  body.appendParagraph("").setFontSize(16);
 
   // ---------- Signature ----------
-  body.appendParagraph("By signing below, I confirm the amounts and payment details above are correct.").setFontSize(9).setItalic(true).setForegroundColor(GRAY);
-  body.appendParagraph("").setFontSize(6);
-  body.appendParagraph("Signature:").setFontSize(10).setBold(true).setForegroundColor(DARK);
+  body.appendParagraph("By signing below, I confirm the amounts and payment details above are correct.").setFontSize(9).setItalic(true).setForegroundColor(TEXT);
+  body.appendParagraph("").setFontSize(8);
+  body.appendParagraph("Signature:").setFontSize(10).setBold(true).setForegroundColor(TEXT);
   body.appendParagraph("{{SIGNATURE}}").setFontSize(10);
-  body.appendParagraph("Signed on: {{dateGenerated}}").setFontSize(9).setForegroundColor(GRAY);
+  body.appendParagraph("Signed on: {{dateGenerated}}").setFontSize(9).setForegroundColor(TEXT);
 
   // ---------- Footer ----------
   body.appendParagraph("").setFontSize(10);
   body.appendHorizontalRule();
-  body.appendParagraph("Thank you for your business.").setFontSize(9).setForegroundColor(GRAY).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  body.appendParagraph("— Aurix Productions").setFontSize(9).setBold(true).setForegroundColor(DARK).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  body.appendParagraph("Thank you for your business.").setFontSize(9).setForegroundColor(TEXT).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  body.appendParagraph("Aurix").setFontSize(9).setBold(true).setForegroundColor(TEXT).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+  // Generous empty space at the bottom, matching the clean/uncluttered look
+  // of a simple professional invoice rather than filling the whole page.
+  for (let i = 0; i < 14; i++) {
+    body.appendParagraph("").setFontSize(12);
+  }
 
   doc.saveAndClose();
   Logger.log("Template created. Document ID: " + doc.getId());
