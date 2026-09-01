@@ -669,7 +669,6 @@ function setupInvoiceTemplate() {
   // ---------- Footer ----------
   body.appendParagraph("").setFontSize(6);
   body.appendHorizontalRule();
-  body.appendParagraph("Thank you for your business.").setFontSize(9).setForegroundColor(TEXT).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   body.appendParagraph("Aurix").setFontSize(9).setBold(true).setForegroundColor(TEXT).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
   // A little breathing room at the bottom — not a full page's worth. This
