@@ -600,12 +600,10 @@ function setupInvoiceTemplate() {
   const brandPara = brandCell.getChild(0).asParagraph();
   try {
     const logoBlob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark-transparent.png").getBlob();
-    brandPara.appendInlineImage(logoBlob).setWidth(24).setHeight(24);
-    brandPara.appendText(" ");
+    brandPara.appendInlineImage(logoBlob).setWidth(36).setHeight(36);
   } catch (e) {
     // no logo — not fatal
   }
-  brandPara.appendText("Aurix").setFontSize(16).setBold(true).setForegroundColor(TEXT);
 
   const titlePara = invoiceCell.getChild(0).asParagraph();
   titlePara.setText("INVOICE");
