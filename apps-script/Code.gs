@@ -599,7 +599,7 @@ function setupInvoiceTemplate() {
   // fine without it rather than breaking generation entirely.
   const brandPara = brandCell.getChild(0).asParagraph();
   try {
-    const logoBlob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark.png").getBlob();
+    const logoBlob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark-transparent.png").getBlob();
     brandPara.appendInlineImage(logoBlob).setWidth(24).setHeight(24);
     brandPara.appendText(" ");
   } catch (e) {
