@@ -602,7 +602,8 @@ function setupInvoiceTemplate() {
     const logoBlob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark-transparent.png").getBlob();
     brandPara.appendInlineImage(logoBlob).setWidth(40).setHeight(40);
   } catch (e) {
-    // no logo — not fatal
+    // no logo — not fatal, but log why so it's diagnosable
+    Logger.log("Logo fetch/insert failed: " + e);
   }
   brandCell.appendParagraph("AURIX").setFontSize(12).setBold(true).setForegroundColor(TEXT);
 
