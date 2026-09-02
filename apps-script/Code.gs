@@ -19,6 +19,9 @@ const INVOICE_TEMPLATE_DOC_ID = "PASTE_TEMPLATE_DOC_ID_HERE";
 const SIGNED_INVOICES_FOLDER_NAME = "Aurix Signed Invoices";
 const FRONTEND_BASE_URL = "https://menomankhan.github.io/aurix-invoice-system";
 
+// Where activity notifications (new submission, signature completed) go.
+const ADMIN_NOTIFICATION_EMAIL = "nomankhan.priv@gmail.com";
+
 // ============================== HTTP entry points ==============================
 
 function doPost(e) {
@@ -172,6 +175,14 @@ function handleSubmit(body) {
         updatedAt: now,
       });
     });
+
+    const monthsTouched = invoiceIdsTouched.map(function (id) { return id.split("__")[1]; }).join(", ");
+    const totalAmount = prepared.reduce(function (sum, p) { return sum + p.amount; }, 0);
+    notifyAdmin(
+      "New submission — " + auth.fullName,
+      auth.fullName + " (" + auth.username + ") submitted " + prepared.length + " line item(s) for " + monthsTouched +
+        ". Total: Rs " + totalAmount.toLocaleString() + ".\n\nReview it in Admin: " + FRONTEND_BASE_URL + "/admin.html"
+    );
 
     return { success: true };
   } finally {
@@ -404,6 +415,13 @@ function handleSubmitSignature(body) {
     });
     updateFields("Invoices", "id", sig.invoiceId, { status: "Signed", updatedAt: new Date().toISOString() });
 
+    const fullName = user ? user.fullName : sig.username;
+    notifyAdmin(
+      "Signed — " + fullName,
+      fullName + " (" + sig.username + ") signed their invoice for " + formatMonthLabel(invoice.month) +
+        " (Rs " + (Number(invoice.total) || 0).toLocaleString() + ").\n\nSigned PDF: " + pdfUrl
+    );
+
     return { success: true };
   } finally {
     lock.releaseLock();
@@ -498,6 +516,16 @@ function getOrCreateSignedInvoicesFolder() {
   const existing = DriveApp.getFoldersByName(SIGNED_INVOICES_FOLDER_NAME);
   if (existing.hasNext()) return existing.next();
   return DriveApp.createFolder(SIGNED_INVOICES_FOLDER_NAME);
+}
+
+// Best-effort activity ping to the admin — never lets a notification
+// failure break the actual submit/sign action it's reporting on.
+function notifyAdmin(subject, body) {
+  try {
+    MailApp.sendEmail(ADMIN_NOTIFICATION_EMAIL, "Aurix Invoices — " + subject, body);
+  } catch (e) {
+    Logger.log("Admin notification failed: " + e);
+  }
 }
 
 function formatMonthLabel(monthValue) {
