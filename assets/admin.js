@@ -200,22 +200,21 @@
       .filter(Boolean);
   }
 
-  function render() {
-    const filtered = getFiltered();
-    const grandTotal = filtered.reduce((s, inv) => s + inv.total, 0);
-    grandTotalEl.textContent = currency(grandTotal);
-    countEl.textContent = `${filtered.length} invoice${filtered.length === 1 ? "" : "s"}`;
+  // The list is grouped by where each invoice sits in the
+  // Submitted -> Approved -> Sent -> Signed -> Paid pipeline, since that's
+  // exactly what determines what (if anything) you need to do with it.
+  // Paid is a pure archive, so it stays collapsed unless opened.
+  const STAGES = [
+    { status: "Submitted", label: "Needs Review" },
+    { status: "Approved", label: "Ready to Send" },
+    { status: "Sent", label: "Awaiting Signature" },
+    { status: "Signed", label: "Ready to Pay" },
+    { status: "Paid", label: "Paid", collapsible: true },
+  ];
+  let paidSectionOpen = false;
 
-    if (filtered.length === 0) {
-      listEl.innerHTML = "";
-      emptyEl.classList.remove("hidden");
-      return;
-    }
-    emptyEl.classList.add("hidden");
-
-    const sorted = [...filtered].sort((a, b) => b.month.localeCompare(a.month) || (a.fullName || a.username).localeCompare(b.fullName || b.username));
-
-    listEl.innerHTML = sorted.map((inv) => `
+  function invoiceCardHtml(inv) {
+    return `
       <div class="aurix-card rounded-2xl p-5" data-invoice-id="${escapeHtml(inv.invoiceId)}">
         <div class="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -238,7 +237,62 @@
         ${renderLineItemsTable(inv.lineItems)}
         ${inv.notes ? `<div class="mt-4 pt-4 border-t border-white/5"><p class="text-white/30 text-[11px] uppercase tracking-widest font-bold mb-1.5">Notes</p><p class="text-white/60 text-sm whitespace-pre-wrap">${escapeHtml(inv.notes)}</p></div>` : ""}
       </div>
-    `).join("");
+    `;
+  }
+
+  function render() {
+    const filtered = getFiltered();
+    const grandTotal = filtered.reduce((s, inv) => s + inv.total, 0);
+    grandTotalEl.textContent = currency(grandTotal);
+    countEl.textContent = `${filtered.length} invoice${filtered.length === 1 ? "" : "s"}`;
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = "";
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+    emptyEl.classList.add("hidden");
+
+    const byStatus = {};
+    filtered.forEach((inv) => { (byStatus[inv.status] = byStatus[inv.status] || []).push(inv); });
+
+    // Any status outside the known pipeline (shouldn't happen, but data can
+    // drift) still gets its own section rather than silently disappearing.
+    const knownStatuses = STAGES.map((s) => s.status);
+    const stages = STAGES.concat(
+      Object.keys(byStatus)
+        .filter((s) => knownStatuses.indexOf(s) === -1)
+        .map((s) => ({ status: s, label: s }))
+    );
+
+    listEl.innerHTML = stages
+      .filter((stage) => byStatus[stage.status] && byStatus[stage.status].length)
+      .map((stage) => {
+        const group = [...byStatus[stage.status]].sort((a, b) => b.month.localeCompare(a.month) || (a.fullName || a.username).localeCompare(b.fullName || b.username));
+        const subtotal = group.reduce((s, inv) => s + inv.total, 0);
+        const collapsed = !!stage.collapsible && !paidSectionOpen;
+        return `
+          <div data-stage="${escapeHtml(stage.status)}">
+            <div class="flex items-center justify-between gap-3 px-1 py-2 ${stage.collapsible ? "cursor-pointer stageToggle" : ""}">
+              <div class="flex items-center gap-2">
+                ${stage.collapsible ? `<svg class="stageChevron transition-transform ${collapsed ? "" : "rotate-90"}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 18l6-6-6-6"/></svg>` : ""}
+                <h3 class="text-xs font-bold uppercase tracking-widest text-white/50">${escapeHtml(stage.label)}</h3>
+                <span class="text-white/30 text-xs font-semibold">${group.length}</span>
+              </div>
+              <p class="text-white/40 text-xs font-semibold">${currency(subtotal)}</p>
+            </div>
+            ${collapsed ? "" : `<div class="space-y-4">${group.map(invoiceCardHtml).join("")}</div>`}
+          </div>
+        `;
+      })
+      .join("");
+
+    listEl.querySelectorAll(".stageToggle").forEach((headerEl) => {
+      headerEl.addEventListener("click", () => {
+        paidSectionOpen = !paidSectionOpen;
+        render();
+      });
+    });
 
     listEl.querySelectorAll(".resubmitBtn").forEach((btn) => {
       btn.addEventListener("click", async () => {
