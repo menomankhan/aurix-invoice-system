@@ -558,6 +558,12 @@
           <button class="saveTeamMemberBtn text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Save</button>
           <span class="teamSavedNote text-xs text-green-400 hidden">Saved</span>
         </div>
+        <div class="flex items-center gap-2 pt-3 border-t border-white/5">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30 whitespace-nowrap">Allow Resubmit For</label>
+          <input type="month" class="resubmitMonthInput aurix-input rounded-lg px-2 py-1.5 text-sm" />
+          <button class="resubmitTeamBtn text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-white/10 hover:border-amber-400 hover:bg-amber-400/10 transition text-amber-400/80 whitespace-nowrap" title="Unlocks that month even if their invoice isn't showing below — e.g. after a test submission was deleted">🔒 Allow Resubmit</button>
+          <span class="resubmitTeamNote text-xs hidden"></span>
+        </div>
       </div>
     `).join("");
 
@@ -579,6 +585,31 @@
         } catch (err) {
           manageTeamErrorEl.textContent = err.message || "Could not save that person's details.";
           manageTeamErrorEl.classList.remove("hidden");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    teamMembersListEl.querySelectorAll(".resubmitTeamBtn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const card = btn.closest("[data-username]");
+        const monthInput = card.querySelector(".resubmitMonthInput");
+        const note = card.querySelector(".resubmitTeamNote");
+        note.classList.add("hidden");
+        if (!monthInput.value) {
+          note.textContent = "Pick a month first.";
+          note.className = "resubmitTeamNote text-xs text-red-400";
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await window.AurixApi.grantResubmitSlot(card.dataset.username, monthInput.value);
+          note.textContent = "Unlocked — they can submit again for that month.";
+          note.className = "resubmitTeamNote text-xs text-green-400";
+        } catch (err) {
+          note.textContent = err.message || "Could not unlock that month.";
+          note.className = "resubmitTeamNote text-xs text-red-400";
         } finally {
           btn.disabled = false;
         }

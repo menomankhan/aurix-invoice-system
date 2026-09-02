@@ -797,9 +797,19 @@ function handleAdminDeleteLineItem(body) {
 }
 
 function recomputeInvoiceTotal(invoiceId) {
-  const total = readRows("LineItems")
-    .filter(function (r) { return r.invoiceId === invoiceId; })
-    .reduce(function (sum, r) { return sum + (Number(r.amount) || 0); }, 0);
+  const remaining = readRows("LineItems").filter(function (r) { return r.invoiceId === invoiceId; });
+
+  if (remaining.length === 0) {
+    // No line items left for this invoice — remove the now-empty Invoices
+    // row entirely instead of leaving an orphaned locked record behind. An
+    // orphan like that is invisible in Admin (which only lists invoices
+    // that still have line items) but still blocks that person from
+    // submitting again for the month, with no visible way to unlock it.
+    deleteRowById("Invoices", invoiceId);
+    return;
+  }
+
+  const total = remaining.reduce(function (sum, r) { return sum + (Number(r.amount) || 0); }, 0);
   updateFields("Invoices", "id", invoiceId, { total: Math.round(total * 100) / 100, updatedAt: new Date().toISOString() });
 }
 
