@@ -594,6 +594,17 @@ function authorizeDriveScope() {
   Logger.log("Open that link to confirm it looks right, then delete it — it's just a test, safe to remove from the 'Aurix Signed Invoices' folder in your Drive.");
 }
 
+// Run this ONCE from the Apps Script editor (select "authorizeUrlFetchScope",
+// click Run) if you see "You do not have permission to call
+// UrlFetchApp.fetch" — this is what pulls the Aurix logo into the invoice
+// template. Fetching the logo is its own OAuth scope, separate from Mail
+// and Drive, so it needs its own one-time authorization run.
+function authorizeUrlFetchScope() {
+  const blob = UrlFetchApp.fetch(FRONTEND_BASE_URL + "/assets/logo-mark-transparent.png").getBlob();
+  Logger.log("UrlFetch authorized. Fetched " + blob.getBytes().length + " bytes from " + FRONTEND_BASE_URL + "/assets/logo-mark-transparent.png");
+  Logger.log("Now re-run setupInvoiceTemplate so the logo actually gets embedded.");
+}
+
 // Run this ONCE from the Apps Script editor (select "setupInvoiceTemplate"
 // from the function dropdown at the top, click Run) to build the invoice
 // template Doc. Copy the Document ID it logs (View → Logs, or Ctrl/Cmd+Enter)
