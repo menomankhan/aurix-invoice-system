@@ -46,6 +46,8 @@ function doPost(e) {
       case "grantResubmitSlot": result = handleGrantResubmitSlot(body); break;
       case "adminUpdateLineItem": result = handleAdminUpdateLineItem(body); break;
       case "adminDeleteLineItem": result = handleAdminDeleteLineItem(body); break;
+      case "adminAddLineItem": result = handleAdminAddLineItem(body); break;
+      case "adminDeleteInvoice": result = handleAdminDeleteInvoice(body); break;
       case "getTeamMembers": result = handleGetTeamMembers(body); break;
       case "updateTeamMember": result = handleUpdateTeamMember(body); break;
       case "generateAndSendInvoice": result = handleGenerateAndSendInvoice(body); break;
@@ -805,6 +807,113 @@ function handleAdminDeleteLineItem(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// Lets the admin add a line item directly onto any invoice — real client
+// work, or a Bonus/Adjustment entry (client "—", any signed rate) — without
+// going through the member's own Submit flow. Creates the Invoices row if
+// this is the first thing ever added for that person+month; otherwise
+// preserves whatever stage the invoice is already at (adding a line to a
+// Signed invoice won't rewrite the PDF that was already signed, but the
+// running total does update).
+function handleAdminAddLineItem(body) {
+  requireAdmin(body);
+  const username = String(body.username || "").trim();
+  const month = String(body.month || "").trim();
+  const client = String(body.client || "").trim();
+  const workType = String(body.workType || "").trim();
+  if (!username || !month || !client || !workType) throw new Error("Missing username, month, client, or work type");
+  if (!findRow(readRows("Users"), "username", username)) throw new Error("Unknown team member");
+
+  const quantity = body.quantity === undefined || body.quantity === "" ? 1 : Number(body.quantity);
+  const rate = Number(body.rate);
+  if (!isFinite(quantity) || !isFinite(rate)) throw new Error("Quantity and rate must be valid numbers");
+
+  const invoiceId = username + "__" + month;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const now = new Date().toISOString();
+    appendRow("LineItems", {
+      id: Utilities.getUuid(),
+      invoiceId: invoiceId,
+      username: username,
+      month: month,
+      client: client,
+      endClient: String(body.endClient || "").trim(),
+      workType: workType,
+      description: String(body.description || "").trim(),
+      quantity: quantity,
+      rate: rate,
+      amount: Math.round(quantity * rate * 100) / 100,
+      submittedAt: now,
+    });
+
+    const total = readRows("LineItems")
+      .filter(function (r) { return r.invoiceId === invoiceId; })
+      .reduce(function (sum, r) { return sum + (Number(r.amount) || 0); }, 0);
+
+    const existing = findRow(readRows("Invoices"), "id", invoiceId);
+    upsertRow("Invoices", "id", {
+      id: invoiceId,
+      username: username,
+      month: month,
+      total: Math.round(total * 100) / 100,
+      status: existing ? existing.status : "Submitted",
+      notes: existing ? String(existing.notes || "") : "",
+      locked: true,
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now,
+    });
+
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Wipes an invoice entirely — its line items, any signature/PDF record, and
+// the invoice row itself — for a wrongly-submitted invoice that shouldn't
+// exist at all, as opposed to editing/removing individual lines. If it was
+// already signed, the signed PDF file in Drive is trashed too so nothing
+// lingers.
+function handleAdminDeleteInvoice(body) {
+  requireAdmin(body);
+  const invoiceId = String(body.invoiceId || "").trim();
+  if (!invoiceId) throw new Error("Missing invoiceId");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const lineItemsDeleted = deleteRowsWhere("LineItems", function (r) { return r.invoiceId === invoiceId; });
+
+    const signatures = readRows("Signatures").filter(function (r) { return r.invoiceId === invoiceId; });
+    signatures.forEach(function (sig) {
+      if (!sig.pdfUrl) return;
+      try {
+        const match = String(sig.pdfUrl).match(/\/d\/([^/]+)/);
+        if (match) DriveApp.getFileById(match[1]).setTrashed(true);
+      } catch (e) {
+        Logger.log("Could not trash signed PDF for " + invoiceId + ": " + e);
+      }
+    });
+    deleteRowsWhere("Signatures", function (r) { return r.invoiceId === invoiceId; });
+
+    const invoiceExisted = deleteRowById("Invoices", invoiceId);
+    if (!invoiceExisted && lineItemsDeleted === 0) throw new Error("Invoice not found");
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Deletes every row in a sheet matching a predicate over its header-keyed
+// row object. Returns how many rows were removed.
+function deleteRowsWhere(sheetName, predicate) {
+  const matches = readRows(sheetName).filter(predicate);
+  matches.forEach(function (r) { deleteRowById(sheetName, r.id); });
+  return matches.length;
 }
 
 function recomputeInvoiceTotal(invoiceId) {

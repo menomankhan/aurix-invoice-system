@@ -92,6 +92,12 @@ window.AurixApi = (function () {
     adminDeleteLineItem(id) {
       return call("adminDeleteLineItem", { id });
     },
+    adminAddLineItem(fields) {
+      return call("adminAddLineItem", fields);
+    },
+    adminDeleteInvoice(invoiceId) {
+      return call("adminDeleteInvoice", { invoiceId });
+    },
     getTeamMembers() {
       return call("getTeamMembers", {});
     },
