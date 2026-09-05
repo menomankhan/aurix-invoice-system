@@ -1,1 +1,1 @@
-id,invoiceId,username,month,client,endClient,workType,description,quantity,rate,amount,submittedAt
+id,invoiceId,username,month,client,endClient,workType,description,quantity,rate,currency,exchangeRate,amount,submittedAt

@@ -181,6 +181,25 @@
         </div>
       </div>
 
+      <div class="aurix-card rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold">Exchange Rate</h2>
+          <button id="toggleExchangeRate" type="button" class="text-xs font-bold text-white/50 hover:text-white transition">Show</button>
+        </div>
+        <div id="exchangeRateBody" class="hidden space-y-3">
+          <p class="text-white/40 text-xs">Used to convert USD line items to PKR. Changing this only affects new lines added from now on — invoices already submitted keep whatever rate was in effect when they were submitted.</p>
+          <div class="flex items-end gap-3 flex-wrap">
+            <div class="space-y-1">
+              <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">1 USD = ? PKR</label>
+              <input type="number" min="0" step="0.01" id="usdToPkrRateInput" class="aurix-input rounded-lg px-3 py-2 text-sm w-32" />
+            </div>
+            <button id="saveExchangeRateBtn" type="button" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 hover:border-aurixblue hover:bg-aurixblue/10 transition">Save</button>
+            <span id="exchangeRateSavedNote" class="text-xs text-green-400 hidden">Saved</span>
+          </div>
+          <p id="exchangeRateError" class="hidden text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></p>
+        </div>
+      </div>
+
       <div class="flex items-center gap-2" id="adminInvoiceTabs">
         <button type="button" data-tab="new" class="adminTabBtn text-sm font-bold px-4 py-2 rounded-xl border transition">New</button>
         <button type="button" data-tab="paid" class="adminTabBtn text-sm font-bold px-4 py-2 rounded-xl border transition">Paid</button>
@@ -283,7 +302,7 @@
           <select class="monthSelect aurix-input w-full rounded-lg px-3 py-2 text-sm"></select>
         </div>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr] gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-3">
         <div class="space-y-1">
           <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Description</label>
           <input type="text" class="descriptionInput aurix-input w-full rounded-lg px-3 py-2 text-sm" placeholder="Short description" />
@@ -293,11 +312,18 @@
           <input type="number" min="0" step="1" value="1" class="quantityInput aurix-input w-full rounded-lg px-3 py-2 text-sm" />
         </div>
         <div class="space-y-1">
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Currency</label>
+          <select class="currencySelect aurix-input w-full rounded-lg px-3 py-2 text-sm">
+            <option value="PKR">PKR</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div class="space-y-1">
           <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Rate</label>
           <input type="number" min="0" step="0.01" value="0" class="rateInput aurix-input w-full rounded-lg px-3 py-2 text-sm" />
         </div>
         <div class="space-y-1">
-          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Amount</label>
+          <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Amount (Rs)</label>
           <div class="amountDisplay aurix-input w-full rounded-lg px-3 py-2 text-sm bg-white/[0.02] text-white/70 font-semibold">Rs 0.00</div>
         </div>
       </div>
@@ -311,6 +337,7 @@
   <script src="assets/api.js"></script>
   <script src="assets/clients-store.js"></script>
   <script src="assets/work-types-store.js"></script>
+  <script src="assets/settings-store.js"></script>
   <script src="assets/app.js"></script>
   <script src="assets/submit.js"></script>
   <script src="assets/my-invoices.js"></script>

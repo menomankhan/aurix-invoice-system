@@ -13,6 +13,10 @@
     return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function formatRate(li) {
+    return li.currency === "USD" ? "$" + (Number(li.rate) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : currency(li.rate);
+  }
+
   function statusBadge(status) {
     const cls = status === "Paid" ? "aurix-badge-paid" : status === "Approved" ? "aurix-badge-approved" : "aurix-badge-submitted";
     return `<span class="aurix-badge ${cls}">${status}</span>`;
@@ -41,7 +45,7 @@
         <td class="py-2.5 pr-4 text-white/70">${escapeHtml(li.workType)}</td>
         <td class="py-2.5 pr-4 text-white/50">${escapeHtml(li.description || "—")}</td>
         <td class="py-2.5 pr-4 text-right text-white/70">${li.quantity}</td>
-        <td class="py-2.5 pr-4 text-right text-white/70">${currency(li.rate)}</td>
+        <td class="py-2.5 pr-4 text-right text-white/70">${formatRate(li)}</td>
         <td class="py-2.5 text-right font-semibold text-white">${currency(li.amount)}</td>
       </tr>
     `).join("");

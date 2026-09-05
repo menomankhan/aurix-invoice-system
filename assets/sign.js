@@ -25,6 +25,10 @@
     return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function formatRate(li) {
+    return li.currency === "USD" ? "$" + (Number(li.rate) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : currency(li.rate);
+  }
+
   function escapeHtml(str) {
     const div = document.createElement("div");
     div.textContent = String(str ?? "");
@@ -139,7 +143,7 @@
           <td class="py-2 pr-3 text-white/70 text-sm">${escapeHtml(li.workType)}</td>
           <td class="py-2 pr-3 text-white/50 text-sm">${escapeHtml(li.description || "—")}</td>
           <td class="py-2 pr-3 text-right text-white/70 text-sm">${li.quantity}</td>
-          <td class="py-2 pr-3 text-right text-white/70 text-sm">${currency(li.rate)}</td>
+          <td class="py-2 pr-3 text-right text-white/70 text-sm">${formatRate(li)}</td>
           <td class="py-2 text-right font-semibold text-white text-sm">${currency(li.amount)}</td>
         </tr>
       `).join("");

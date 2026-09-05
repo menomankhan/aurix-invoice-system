@@ -50,6 +50,8 @@ function doPost(e) {
       case "adminDeleteInvoice": result = handleAdminDeleteInvoice(body); break;
       case "getTeamMembers": result = handleGetTeamMembers(body); break;
       case "updateTeamMember": result = handleUpdateTeamMember(body); break;
+      case "getSettings": result = handleGetSettings(body); break;
+      case "updateSettings": result = handleUpdateSettings(body); break;
       case "generateAndSendInvoice": result = handleGenerateAndSendInvoice(body); break;
       case "getSignableInvoice": result = handleGetSignableInvoice(body); break;
       case "submitSignature": result = handleSubmitSignature(body); break;
@@ -120,10 +122,16 @@ function handleSubmit(body) {
       }
     }
 
+    // Locked in at submission time — a USD line item's PKR amount never
+    // silently shifts later if the admin updates the rate for future months.
+    const usdToPkrRate = Number(getSetting("usdToPkrRate", 1)) || 1;
+
     const now = new Date().toISOString();
     const prepared = lineItems.map(function (li) {
       const quantity = Number(li.quantity) || 0;
       const rate = Number(li.rate) || 0;
+      const currencyCode = li.currency === "USD" ? "USD" : "PKR";
+      const exchangeRate = currencyCode === "USD" ? usdToPkrRate : 1;
       return {
         id: Utilities.getUuid(),
         invoiceId: auth.username + "__" + li.month,
@@ -135,7 +143,9 @@ function handleSubmit(body) {
         description: li.description || "",
         quantity: quantity,
         rate: rate,
-        amount: Math.round(quantity * rate * 100) / 100,
+        currency: currencyCode,
+        exchangeRate: exchangeRate,
+        amount: Math.round(quantity * rate * exchangeRate * 100) / 100,
         submittedAt: now,
       };
     });
@@ -286,6 +296,34 @@ function handleUpdateTeamMember(body) {
   return { success: true };
 }
 
+// Reads a single key from the Settings sheet ("key","value" columns).
+// Falls back rather than throwing if the sheet or row doesn't exist yet,
+// since Settings is an optional sheet added after the rest of the system.
+function getSetting(key, fallback) {
+  try {
+    const row = findRow(readRows("Settings"), "key", key);
+    return row ? row.value : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+// Any logged-in user can read settings (Submit needs the live USD->PKR
+// rate to show a correct running total as someone types); only the admin
+// can change them.
+function handleGetSettings(body) {
+  requireAuth(body);
+  return { usdToPkrRate: Number(getSetting("usdToPkrRate", 1)) || 1 };
+}
+
+function handleUpdateSettings(body) {
+  requireAdmin(body);
+  const rate = Number(body.usdToPkrRate);
+  if (!(rate > 0)) throw new Error("Enter a valid positive exchange rate");
+  upsertRow("Settings", "key", { key: "usdToPkrRate", value: rate });
+  return { success: true };
+}
+
 // Kicks off the sign-off flow: records a one-time sign token (separate from
 // login JWTs — this one is the entire auth for the two public actions
 // below) and emails the team member a link. The actual invoice document
@@ -371,7 +409,8 @@ function handleGetSignableInvoice(body) {
     .map(function (r) {
       return {
         client: r.client, endClient: r.endClient, workType: r.workType, description: r.description,
-        quantity: Number(r.quantity) || 0, rate: Number(r.rate) || 0, amount: Number(r.amount) || 0,
+        quantity: Number(r.quantity) || 0, rate: Number(r.rate) || 0, currency: r.currency === "USD" ? "USD" : "PKR",
+        amount: Number(r.amount) || 0,
       };
     });
 
@@ -449,11 +488,14 @@ function generateSignedInvoicePdf(invoice, user, lineItems, signatureImageDataUr
   docBody.replaceText("{{bankAccountNumber}}", (user && user.bankAccountNumber) || "—");
   docBody.replaceText("{{dateGenerated}}", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMMM d, yyyy"));
 
-  const tableData = [["Client", "End Client", "Work Type", "Description", "Qty", "Rate", "Amount"]];
+  const tableData = [["Client", "End Client", "Work Type", "Description", "Qty", "Rate", "Amount (Rs)"]];
   lineItems.forEach(function (li) {
+    const rateLabel = li.currency === "USD"
+      ? "$" + (Number(li.rate) || 0).toLocaleString()
+      : "Rs " + (Number(li.rate) || 0).toLocaleString();
     tableData.push([
       li.client, li.endClient || "—", li.workType, li.description || "—",
-      String(li.quantity), "Rs " + (Number(li.rate) || 0).toLocaleString(), "Rs " + (Number(li.amount) || 0).toLocaleString(),
+      String(li.quantity), rateLabel, "Rs " + (Number(li.amount) || 0).toLocaleString(),
     ]);
   });
   insertAtPlaceholder(docBody, "{{LINE_ITEMS_TABLE}}", function (index) {
@@ -767,11 +809,14 @@ function handleAdminUpdateLineItem(body) {
 
     const quantity = Number(body.quantity);
     const rate = Number(body.rate);
-    if (!(quantity >= 0) || !(rate >= 0)) throw new Error("Quantity and rate must be valid numbers");
+    if (!isFinite(quantity) || !isFinite(rate)) throw new Error("Quantity and rate must be valid numbers");
 
     const client = String(body.client || "").trim();
     const workType = String(body.workType || "").trim();
     if (!client || !workType) throw new Error("Client and work type are required");
+
+    const currencyCode = body.currency === "USD" ? "USD" : "PKR";
+    const exchangeRate = currencyCode === "USD" ? (Number(getSetting("usdToPkrRate", 1)) || 1) : 1;
 
     updateFields("LineItems", "id", id, {
       client: client,
@@ -780,7 +825,9 @@ function handleAdminUpdateLineItem(body) {
       description: String(body.description || "").trim(),
       quantity: quantity,
       rate: rate,
-      amount: Math.round(quantity * rate * 100) / 100,
+      currency: currencyCode,
+      exchangeRate: exchangeRate,
+      amount: Math.round(quantity * rate * exchangeRate * 100) / 100,
     });
 
     recomputeInvoiceTotal(row.invoiceId);
@@ -830,6 +877,8 @@ function handleAdminAddLineItem(body) {
   if (!isFinite(quantity) || !isFinite(rate)) throw new Error("Quantity and rate must be valid numbers");
 
   const invoiceId = username + "__" + month;
+  const currencyCode = body.currency === "USD" ? "USD" : "PKR";
+  const exchangeRate = currencyCode === "USD" ? (Number(getSetting("usdToPkrRate", 1)) || 1) : 1;
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -846,7 +895,9 @@ function handleAdminAddLineItem(body) {
       description: String(body.description || "").trim(),
       quantity: quantity,
       rate: rate,
-      amount: Math.round(quantity * rate * 100) / 100,
+      currency: currencyCode,
+      exchangeRate: exchangeRate,
+      amount: Math.round(quantity * rate * exchangeRate * 100) / 100,
       submittedAt: now,
     });
 
@@ -1076,7 +1127,8 @@ function buildInvoiceList(lineItems, invoiceRecords, fullNameByUsername, pdfUrlB
     if (!grouped[r.invoiceId]) grouped[r.invoiceId] = [];
     grouped[r.invoiceId].push({
       id: r.id, client: r.client, endClient: r.endClient, workType: r.workType, description: r.description,
-      quantity: Number(r.quantity) || 0, rate: Number(r.rate) || 0, amount: Number(r.amount) || 0,
+      quantity: Number(r.quantity) || 0, rate: Number(r.rate) || 0, currency: r.currency === "USD" ? "USD" : "PKR",
+      amount: Number(r.amount) || 0,
     });
   });
 

@@ -37,6 +37,13 @@
   const manageTeamErrorEl = document.getElementById("manageTeamError");
   const teamMembersListEl = document.getElementById("teamMembersList");
 
+  const toggleExchangeRateBtn = document.getElementById("toggleExchangeRate");
+  const exchangeRateBody = document.getElementById("exchangeRateBody");
+  const usdToPkrRateInput = document.getElementById("usdToPkrRateInput");
+  const saveExchangeRateBtn = document.getElementById("saveExchangeRateBtn");
+  const exchangeRateSavedNote = document.getElementById("exchangeRateSavedNote");
+  const exchangeRateErrorEl = document.getElementById("exchangeRateError");
+
   const { formatMonth } = window.AURIX_DATA;
 
   let allInvoices = [];
@@ -44,6 +51,12 @@
 
   function currency(n) {
     return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // The Rate column shows what was actually entered, in whatever currency it
+  // was entered in; the Amount column is always the converted PKR figure.
+  function formatRate(li) {
+    return li.currency === "USD" ? "$" + (Number(li.rate) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : currency(li.rate);
   }
 
   function escapeHtml(str) {
@@ -106,7 +119,7 @@
         <td class="py-2.5 pr-4 text-white/70">${escapeHtml(li.workType)}</td>
         <td class="py-2.5 pr-4 text-white/50">${escapeHtml(li.description || "—")}</td>
         <td class="py-2.5 pr-4 text-right text-white/70">${li.quantity}</td>
-        <td class="py-2.5 pr-4 text-right text-white/70">${currency(li.rate)}</td>
+        <td class="py-2.5 pr-4 text-right text-white/70">${formatRate(li)}</td>
         <td class="py-2.5 pr-4 text-right font-semibold text-white">${currency(li.amount)}</td>
         <td class="py-2.5 pl-2 text-right whitespace-nowrap">
           <button class="editLineItemBtn text-white/30 hover:text-white transition text-xs font-bold mr-2">Edit</button>
@@ -148,7 +161,15 @@
       <td class="py-2 pr-2"><select class="editWorkType aurix-input rounded-lg px-2 py-1.5 text-xs w-full">${workTypeOptions.map((w) => `<option value="${escapeHtml(w)}" ${w === li.workType ? "selected" : ""}>${escapeHtml(w)}</option>`).join("")}</select></td>
       <td class="py-2 pr-2"><input type="text" class="editDescription aurix-input rounded-lg px-2 py-1.5 text-xs w-full" value="${escapeHtml(li.description || "")}" /></td>
       <td class="py-2 pr-2"><input type="number" min="0" step="1" class="editQty aurix-input rounded-lg px-2 py-1.5 text-xs w-16 text-right" value="${li.quantity}" /></td>
-      <td class="py-2 pr-2"><input type="number" min="0" step="0.01" class="editRate aurix-input rounded-lg px-2 py-1.5 text-xs w-20 text-right" value="${li.rate}" /></td>
+      <td class="py-2 pr-2">
+        <div class="flex flex-col gap-1">
+          <select class="editCurrency aurix-input rounded-lg px-1.5 py-1 text-[10px] w-20">
+            <option value="PKR" ${li.currency !== "USD" ? "selected" : ""}>PKR</option>
+            <option value="USD" ${li.currency === "USD" ? "selected" : ""}>USD</option>
+          </select>
+          <input type="number" step="0.01" class="editRate aurix-input rounded-lg px-2 py-1.5 text-xs w-20 text-right" value="${li.rate}" />
+        </div>
+      </td>
       <td class="py-2 pr-4 text-right text-white/30 text-xs">recalculated on save</td>
       <td class="py-2 pl-2 text-right whitespace-nowrap">
         <button class="saveLineItemBtn text-aurixblue hover:text-white transition text-xs font-bold mr-2">Save</button>
@@ -171,6 +192,7 @@
           description: row.querySelector(".editDescription").value.trim(),
           quantity: Number(row.querySelector(".editQty").value) || 0,
           rate: Number(row.querySelector(".editRate").value) || 0,
+          currency: row.querySelector(".editCurrency").value,
         });
         await window.AurixAdmin.load();
       } catch (err) {
@@ -459,14 +481,21 @@
               <select class="newLineWorkType aurix-input w-full rounded-lg px-3 py-2 text-sm"><option value="">Select a client first…</option></select>
             </div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div class="space-y-1 sm:col-span-2">
+          <div class="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr] gap-3">
+            <div class="space-y-1 col-span-2 sm:col-span-1">
               <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Description</label>
               <input type="text" class="newLineDescription aurix-input w-full rounded-lg px-3 py-2 text-sm" placeholder="Optional" />
             </div>
             <div class="space-y-1">
               <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Qty</label>
               <input type="number" min="0" step="1" value="1" class="newLineQty aurix-input w-full rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Currency</label>
+              <select class="newLineCurrency aurix-input w-full rounded-lg px-3 py-2 text-sm">
+                <option value="PKR">PKR</option>
+                <option value="USD">USD</option>
+              </select>
             </div>
             <div class="space-y-1">
               <label class="text-[10px] font-bold uppercase tracking-widest text-white/30">Rate</label>
@@ -521,6 +550,7 @@
             description: slot.querySelector(".newLineDescription").value.trim(),
             quantity: Number(slot.querySelector(".newLineQty").value) || 0,
             rate: Number(slot.querySelector(".newLineRate").value) || 0,
+            currency: slot.querySelector(".newLineCurrency").value,
           });
           await window.AurixAdmin.load();
         } catch (err) {
@@ -920,6 +950,46 @@
     if (isHidden) loadTeamMembers();
   });
 
+  async function loadExchangeRate() {
+    exchangeRateErrorEl.classList.add("hidden");
+    try {
+      const data = await window.AurixSettingsStore.load(true);
+      usdToPkrRateInput.value = data.usdToPkrRate;
+    } catch (err) {
+      exchangeRateErrorEl.textContent = err.message || "Could not load the exchange rate.";
+      exchangeRateErrorEl.classList.remove("hidden");
+    }
+  }
+
+  toggleExchangeRateBtn.addEventListener("click", () => {
+    const isHidden = exchangeRateBody.classList.contains("hidden");
+    exchangeRateBody.classList.toggle("hidden");
+    toggleExchangeRateBtn.textContent = isHidden ? "Hide" : "Show";
+    if (isHidden) loadExchangeRate();
+  });
+
+  saveExchangeRateBtn.addEventListener("click", async () => {
+    exchangeRateSavedNote.classList.add("hidden");
+    exchangeRateErrorEl.classList.add("hidden");
+    const rate = Number(usdToPkrRateInput.value);
+    if (!(rate > 0)) {
+      exchangeRateErrorEl.textContent = "Enter a valid positive rate.";
+      exchangeRateErrorEl.classList.remove("hidden");
+      return;
+    }
+    saveExchangeRateBtn.disabled = true;
+    try {
+      await window.AurixApi.updateSettings({ usdToPkrRate: rate });
+      window.AurixSettingsStore.invalidate();
+      exchangeRateSavedNote.classList.remove("hidden");
+    } catch (err) {
+      exchangeRateErrorEl.textContent = err.message || "Could not save the exchange rate.";
+      exchangeRateErrorEl.classList.remove("hidden");
+    } finally {
+      saveExchangeRateBtn.disabled = false;
+    }
+  });
+
   window.AurixAdmin = {
     async load() {
       loadingEl.classList.remove("hidden");
@@ -933,6 +1003,7 @@
         // fewer dropdown options.
         window.AurixClientsStore.load().catch(() => {});
         window.AurixWorkTypesStore.load().catch(() => {});
+        window.AurixSettingsStore.load().catch(() => {});
         populateFilters();
         render();
       } catch (err) {

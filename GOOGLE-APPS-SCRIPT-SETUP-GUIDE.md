@@ -227,3 +227,30 @@ In the app: **Admin → Manage Team → Show**. For each person, fill in their *
 **A couple of deliberate design choices worth knowing:**
 - The invoice document is built fresh at the moment someone signs, not when you click Send — so if you edit a line item after sending but before they've signed, they'll see the corrected numbers, not stale ones.
 - You can't mark an invoice Paid until it's Signed — the backend enforces this even if something tries to skip a step.
+
+---
+
+## Update: USD line items with PKR conversion
+
+Editors who bill in USD can now pick that per line item on the Submit form. The USD amount is converted to PKR using a rate you control from Admin — and that conversion is **locked in at the moment the line is submitted**, so changing the rate later never silently changes an already-submitted invoice's total.
+
+### 1. Add a new sheet tab
+
+**File → Import → Upload** → `sheet-templates/Settings.csv` → **Insert new sheet**. It comes with one seed row, `usdToPkrRate,280` — change `280` to today's real rate right away (you can also update it later from Admin, see Step 4).
+
+### 2. Add 2 columns to your existing `LineItems` tab
+
+Add these as new column headers in row 1: `currency`, `exchangeRate`. Leave existing rows blank under them — old line items are treated as PKR with a 1:1 rate automatically, nothing needs backfilling.
+
+### 3. Update the backend code and redeploy
+
+Paste the current [apps-script/Code.gs](apps-script/Code.gs) into the Apps Script editor (restore your real `JWT_SECRET` and `INVOICE_TEMPLATE_DOC_ID`), save, then **Deploy → Manage deployments** → pencil icon → **New version** → **Deploy**.
+
+### 4. Set the real exchange rate
+
+In the app: **Admin → Exchange Rate → Show**, enter the current 1 USD = ? PKR rate, click **Save**. You can come back and update this any time — it only affects lines submitted or added from that point forward.
+
+**Where this shows up:**
+- Submit form: each line now has a **Currency** field (PKR/USD) next to Rate. The Amount shown always updates live to the converted PKR figure as you type.
+- My Invoices, Admin, the sign-off page, and the signed PDF all show the **Rate** column in whatever currency it was entered (e.g. `$50.00`), while **Amount** is always the PKR figure used for totals and payment.
+- Admin's **+ Add Line** form (for adding a line item directly to someone's invoice) also has a Currency field, using the same locked-in-at-that-moment conversion.

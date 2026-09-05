@@ -19,6 +19,17 @@
     return "Rs " + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  // A USD line's PKR equivalent uses whatever the admin's rate is right
+  // now — this is just a live preview; the amount actually saved is locked
+  // in server-side at the moment of submission, using the rate at that time.
+  function lineAmount(sub) {
+    const qty = Number(sub.querySelector(".quantityInput").value) || 0;
+    const rate = Number(sub.querySelector(".rateInput").value) || 0;
+    const curr = sub.querySelector(".currencySelect").value;
+    const fx = curr === "USD" ? (window.AurixSettingsStore.get().usdToPkrRate || 1) : 1;
+    return qty * rate * fx;
+  }
+
   function fillSelect(select, options, placeholder) {
     select.innerHTML = "";
     if (placeholder) {
@@ -120,6 +131,7 @@
     const workTypeSelect = sub.querySelector(".workTypeSelect");
     const monthSelect = sub.querySelector(".monthSelect");
     const quantityInput = sub.querySelector(".quantityInput");
+    const currencySelect = sub.querySelector(".currencySelect");
     const rateInput = sub.querySelector(".rateInput");
     const amountDisplay = sub.querySelector(".amountDisplay");
     const removeBtn = sub.querySelector(".removeSubLineItemBtn");
@@ -142,23 +154,23 @@
       const endClient = endClientInput.value.trim();
       const qty = Number(quantityInput.value) || 0;
       const rate = Number(rateInput.value) || 0;
+      const curr = currencySelect.value;
 
       const parts = [workType || "Select work type…"];
       if (endClient) parts.push(endClient);
-      parts.push(`Qty ${qty} × ${currency(rate)}`);
+      parts.push(`Qty ${qty} × ${curr === "USD" ? "$" + rate.toLocaleString() : currency(rate)}`);
       summaryText.textContent = parts.join(" · ");
-      summaryAmount.textContent = currency(qty * rate);
+      summaryAmount.textContent = currency(lineAmount(sub));
     }
 
     function recalcAmount() {
-      const qty = Number(quantityInput.value) || 0;
-      const rate = Number(rateInput.value) || 0;
-      amountDisplay.textContent = currency(qty * rate);
+      amountDisplay.textContent = currency(lineAmount(sub));
       updateSummary();
       recalcGroupSubtotal(group);
       recalcSubmissionTotal();
     }
     quantityInput.addEventListener("input", recalcAmount);
+    currencySelect.addEventListener("change", recalcAmount);
     rateInput.addEventListener("input", recalcAmount);
     endClientInput.addEventListener("input", updateSummary);
     workTypeSelect.addEventListener("change", updateSummary);
@@ -185,22 +197,14 @@
   function recalcGroupSubtotal(group) {
     const subs = group.querySelectorAll(".sub-line-item");
     let total = 0;
-    subs.forEach((sub) => {
-      const qty = Number(sub.querySelector(".quantityInput").value) || 0;
-      const rate = Number(sub.querySelector(".rateInput").value) || 0;
-      total += qty * rate;
-    });
+    subs.forEach((sub) => { total += lineAmount(sub); });
     group.querySelector(".groupSubtotal").textContent = currency(total);
     group.querySelector(".groupItemCount").textContent = `${subs.length} line${subs.length === 1 ? "" : "s"}`;
   }
 
   function recalcSubmissionTotal() {
     let total = 0;
-    container.querySelectorAll(".sub-line-item").forEach((sub) => {
-      const qty = Number(sub.querySelector(".quantityInput").value) || 0;
-      const rate = Number(sub.querySelector(".rateInput").value) || 0;
-      total += qty * rate;
-    });
+    container.querySelectorAll(".sub-line-item").forEach((sub) => { total += lineAmount(sub); });
     totalEl.textContent = currency(total);
   }
 
@@ -221,6 +225,7 @@
         const month = sub.querySelector(".monthSelect").value;
         const quantity = Number(sub.querySelector(".quantityInput").value) || 0;
         const rate = Number(sub.querySelector(".rateInput").value) || 0;
+        const currencyCode = sub.querySelector(".currencySelect").value;
 
         if (!workType || !month) {
           throw new Error("Every line needs a work type and month.");
@@ -229,7 +234,7 @@
           throw new Error("Quantity must be greater than zero on every line.");
         }
 
-        items.push({ client, endClient, workType, description, month, quantity, rate });
+        items.push({ client, endClient, workType, description, month, quantity, rate, currency: currencyCode });
       }
     }
     if (items.length === 0) throw new Error("Add at least one line item first.");
@@ -276,6 +281,10 @@
       setLoading(false);
     }
   });
+
+  // Warm the exchange-rate cache so the first USD line typed already shows
+  // an accurate PKR preview instead of briefly assuming a 1:1 rate.
+  window.AurixSettingsStore.load().catch(() => {});
 
   // start with one client group
   addClientGroup();

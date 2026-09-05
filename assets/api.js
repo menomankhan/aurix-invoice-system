@@ -107,5 +107,11 @@ window.AurixApi = (function () {
     generateAndSendInvoice(invoiceId) {
       return call("generateAndSendInvoice", { invoiceId });
     },
+    getSettings() {
+      return call("getSettings", {});
+    },
+    updateSettings(fields) {
+      return call("updateSettings", fields);
+    },
   };
 })();
