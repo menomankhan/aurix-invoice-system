@@ -17,6 +17,30 @@
     return li.currency === "USD" ? "$" + (Number(li.rate) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : currency(li.rate);
   }
 
+  // This is your own view of what you billed — a USD line shows its USD
+  // amount as entered, not the PKR figure your admin's records convert it
+  // to. (Admin, the sign-off page, and the signed PDF still show PKR,
+  // since that's the actual amount transferred to your bank account.)
+  function formatLineAmount(li) {
+    if (li.currency === "USD") {
+      const usd = (Number(li.quantity) || 0) * (Number(li.rate) || 0);
+      return "$" + usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return currency(li.amount);
+  }
+
+  // A single total only makes sense in one currency. If every line this
+  // month is USD, show the USD sum; otherwise (all PKR, or a mix) show the
+  // PKR total your admin's records use.
+  function invoiceDisplayTotal(inv) {
+    const items = inv.lineItems || [];
+    if (items.length > 0 && items.every((li) => li.currency === "USD")) {
+      const usdTotal = items.reduce((sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.rate) || 0), 0);
+      return "$" + usdTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return currency(inv.total);
+  }
+
   function statusBadge(status) {
     const cls = status === "Paid" ? "aurix-badge-paid" : status === "Approved" ? "aurix-badge-approved" : "aurix-badge-submitted";
     return `<span class="aurix-badge ${cls}">${status}</span>`;
@@ -29,7 +53,7 @@
       <div class="flex items-center justify-between">
         <div>
           <p class="text-white/40 text-xs uppercase tracking-widest font-bold">${formatMonth(thisMonth)} — Running Total</p>
-          <p class="text-2xl font-bold mt-1">${currency(inv ? inv.total : 0)}</p>
+          <p class="text-2xl font-bold mt-1">${inv ? invoiceDisplayTotal(inv) : currency(0)}</p>
         </div>
         ${inv ? statusBadge(inv.status) : `<span class="text-white/30 text-sm">Nothing submitted yet</span>`}
       </div>
@@ -46,7 +70,7 @@
         <td class="py-2.5 pr-4 text-white/50">${escapeHtml(li.description || "—")}</td>
         <td class="py-2.5 pr-4 text-right text-white/70">${li.quantity}</td>
         <td class="py-2.5 pr-4 text-right text-white/70">${formatRate(li)}</td>
-        <td class="py-2.5 text-right font-semibold text-white">${currency(li.amount)}</td>
+        <td class="py-2.5 text-right font-semibold text-white">${formatLineAmount(li)}</td>
       </tr>
     `).join("");
 
@@ -94,7 +118,7 @@
           </div>
           <div class="flex items-center gap-3">
             ${statusBadge(inv.status)}
-            <p class="font-bold text-lg">${currency(inv.total)}</p>
+            <p class="font-bold text-lg">${invoiceDisplayTotal(inv)}</p>
           </div>
         </div>
         ${renderLineItemsTable(inv.lineItems)}
